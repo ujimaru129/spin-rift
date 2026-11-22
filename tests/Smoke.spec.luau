@@ -269,6 +269,68 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"in a match, the arrow keys move across the table and the controls box shows the keys",
+			function()
+				local RunService = globals.game:GetService("RunService")
+				local UserInputService = globals.game:GetService("UserInputService")
+				local remotes = globals.game:GetService("ReplicatedStorage"):FindFirstChild("SpinRiftRemotes")
+				local me = Fake.localPlayer
+				local humanoid = me.Character:FindFirstChildOfClass("Humanoid")
+				local moves = {}
+				rawget(humanoid, "__props").Move = function(_, v, relative)
+					table.insert(moves, { v = v, relative = relative })
+				end
+				local started = false
+				local conn = remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					if e.kind == "Start" then
+						started = true
+					end
+				end)
+				remotes.RequestMatch:FireServer("Normal", { "Curve", "Blink" })
+				for _ = 1, 10 do
+					Fake.clock.now += 1 / 60
+					RunService.Heartbeat:Fire(1 / 60)
+					RunService.RenderStepped:Fire(1 / 60)
+				end
+				expect(started).toBe(true)
+				-- the arrow key counts even though Roblox's camera marked it as processed
+				local right =
+					{ KeyCode = roblox.Enum.KeyCode.Right, UserInputType = roblox.Enum.UserInputType.Keyboard }
+				UserInputService.InputBegan:Fire(right, true)
+				RunService.RenderStepped:Fire(1 / 60)
+				expect(#moves > 0).toBeTruthy()
+				local v = moves[#moves].v
+				expect(math.abs(v.Z) > 0.99 and math.abs(v.X) < 0.01).toBeTruthy()
+				expect(moves[#moves].relative).toBe(false)
+				-- left goes the other way
+				UserInputService.InputEnded:Fire(right, false)
+				local left = { KeyCode = roblox.Enum.KeyCode.Left, UserInputType = roblox.Enum.UserInputType.Keyboard }
+				UserInputService.InputBegan:Fire(left, true)
+				RunService.RenderStepped:Fire(1 / 60)
+				expect(math.abs(moves[#moves].v.Z + v.Z) < 0.01).toBeTruthy()
+				-- let go: no more arrow moves
+				UserInputService.InputEnded:Fire(left, false)
+				local count = #moves
+				RunService.RenderStepped:Fire(1 / 60)
+				expect(#moves).toBe(count)
+				-- the how-to-play box is filled in for keyboard players
+				local box
+				local function find(node)
+					for _, d in node:GetChildren() do
+						if d.Name == "Controls" then
+							box = d
+						end
+						find(d)
+					end
+				end
+				find(me:FindFirstChildOfClass("PlayerGui"))
+				expect(box ~= nil).toBeTruthy()
+				expect(string.find(box.Text, "←", 1, true) ~= nil).toBeTruthy()
+				conn:Disconnect()
+				remotes.LeaveMatch:FireServer()
+			end,
+		},
+		{
 			"two players are paired online, and leaving hands the win to the other",
 			function()
 				local Players = globals.game:GetService("Players")

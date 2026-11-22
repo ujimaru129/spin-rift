@@ -461,6 +461,9 @@ function Fake.globals(sharedNode: any)
 	rawget(runService, "__props").IsStudio = function()
 		return Fake.studio
 	end
+	rawget(runService, "__props").BindToRenderStep = function(self, _name, _priority, fn)
+		self.RenderStepped:Connect(fn)
+	end
 	local services = {
 		ReplicatedStorage = replicated,
 		Players = players,
@@ -513,7 +516,11 @@ function Fake.globals(sharedNode: any)
 			TouchEnabled = false,
 			MouseEnabled = true,
 			InputBegan = Fake.signal(),
+			InputEnded = Fake.signal(),
 			InputChanged = Fake.signal(),
+			GetFocusedTextBox = function()
+				return nil
+			end,
 			GetMouseLocation = function()
 				return roblox.Vector2.new(0, 0)
 			end,

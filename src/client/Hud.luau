@@ -94,6 +94,7 @@ export type Hud = typeof(setmetatable(
 		popup: TextLabel,
 		popupSub: TextLabel,
 		hint: TextLabel,
+		controls: TextLabel,
 		tutorial: TextLabel,
 		announce: TextLabel,
 		slots: { Slot },
@@ -618,6 +619,23 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		cells[i] = c
 	end
 
+	-- how to play, always on screen during a match (text depends on the device; see setControls)
+	local controls = label(match, "", 13, INK, FONT_REGULAR)
+	controls.Name = "Controls"
+	controls.AnchorPoint = Vector2.new(0, 1)
+	controls.Position = UDim2.new(0, 14, 1, -76)
+	controls.Size = UDim2.fromOffset(250, 84)
+	controls.TextXAlignment = Enum.TextXAlignment.Left
+	controls.TextYAlignment = Enum.TextYAlignment.Top
+	controls.TextWrapped = true
+	controls.BackgroundColor3 = PANEL
+	controls.BackgroundTransparency = 0.35
+	corner(controls, 8)
+	local controlsPad = Instance.new("UIPadding")
+	controlsPad.PaddingLeft = UDim.new(0, 10)
+	controlsPad.PaddingTop = UDim.new(0, 6)
+	controlsPad.Parent = controls
+
 	local popup = label(match, "", 64, INK)
 	popup.AnchorPoint = Vector2.new(0.5, 0.5)
 	popup.Position = UDim2.fromScale(0.5, 0.36)
@@ -788,6 +806,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		popup = popup,
 		popupSub = popupSub,
 		hint = hint,
+		controls = controls,
 		tutorial = tutorial,
 		announce = announce,
 		slots = slots,
@@ -1303,6 +1322,11 @@ end
 
 function Hud.setHint(self: Hud, text: string)
 	self.hint.Text = text
+end
+
+-- The how-to-play box shown during a match.
+function Hud.setControls(self: Hud, text: string)
+	self.controls.Text = text
 end
 
 -- Shows the timing grade. offset = seconds early (negative) or late (positive).

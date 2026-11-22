@@ -183,7 +183,39 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 hud:showMenu()
 hud:setArenaButton(arenaButtonText())
 
+-- Left/Right arrow keys move across the table. Roblox's own controls give these keys to the
+-- camera, which our match camera does not use, so we steer the character while they are held.
+local arrowLeft, arrowRight = false, false
+local function trackArrow(input: InputObject, down: boolean): boolean
+	if input.KeyCode == Enum.KeyCode.Left then
+		arrowLeft = down
+		return true
+	elseif input.KeyCode == Enum.KeyCode.Right then
+		arrowRight = down
+		return true
+	end
+	return false
+end
+UserInputService.InputEnded:Connect(function(input)
+	trackArrow(input, false)
+end)
+
+-- Which keys to show in the how-to-play box.
+local function controlsText(): string
+	if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+		return S.t("controls.touch")
+	elseif UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled then
+		return S.t("controls.gamepad")
+	end
+	return S.t("controls.keyboard")
+end
+
 UserInputService.InputBegan:Connect(function(input, processed)
+	-- arrows count even when Roblox's camera claimed them (that is what "processed" means here),
+	-- but not while typing in a text box
+	if UserInputService:GetFocusedTextBox() == nil and trackArrow(input, true) then
+		return
+	end
 	if processed then
 		return
 	end
@@ -419,6 +451,7 @@ local function onEvent(e: { [string]: any })
 		ball:hide()
 		tutorialStep = nil
 		hud:showMatch(opponentLabel(e))
+		hud:setControls(controlsText())
 		-- arena look, wind, and both players' cosmetics
 		ArenaLook.apply(e.arena)
 		windActive = e.wind == true
@@ -538,6 +571,24 @@ RunService.Heartbeat:Connect(function(dt)
 	local debugMs = ReplicatedStorage:GetAttribute(Net.DEBUG_LAG_ATTRIBUTE)
 	local extra = if type(debugMs) == "number" then debugMs else 0
 	hud:setPing(player:GetNetworkPing() * 1000 + extra)
+end)
+
+-- Arrow-key movement, after Roblox's controls have set this frame's move (so ours wins).
+RunService:BindToRenderStep("SpinRiftArrowMove", Enum.RenderPriority.Input.Value + 1, function()
+	local dir = (if arrowRight then 1 else 0) - (if arrowLeft then 1 else 0)
+	if dir == 0 or not origin then
+		return
+	end
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		-- across the table, in the direction that is right/left on screen
+		local right = camera.CFrame.RightVector
+		local flat = Vector3.new(right.X, 0, right.Z)
+		if flat.Magnitude > 0.01 then
+			humanoid:Move(flat.Unit * dir, false)
+		end
+	end
 end)
 
 -- Broadcast-style camera behind our own side, following us a little across the table.
