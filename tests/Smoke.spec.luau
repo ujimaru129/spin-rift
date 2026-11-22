@@ -166,6 +166,28 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"every special-move effect, the PERFECT burst and the cut-in run without errors",
+			function()
+				local Fx = loader.require("src/client/Fx")
+				local folder = globals.Instance.new("Folder")
+				local camera = globals.Instance.new("Camera")
+				local at = roblox.Vector3.new(11, 4, 0)
+				local towards = roblox.Vector3.new(-11, 4, 2)
+				for _, d in Abilities.List do
+					local color = Hud.abilityColor(d.id)
+					Fx.special(folder, camera, d.id, color, at, towards, 0.05)
+				end
+				Fx.vortex(folder, roblox.Vector3.new(14, 0, 0), Hud.abilityColor("GravityWell"), 0.05)
+				Fx.perfect(folder, at, roblox.Color3.new(1, 0.8, 0.2))
+				expect(#folder:GetChildren() > 0).toBeTruthy()
+				expect(camera:FindFirstChild("SpinRiftFxTint") ~= nil).toBeTruthy()
+				local hud = newHud()
+				hud:cutIn("スマッシュ", Hud.abilityColor("Smash"))
+				expect(hud.cutBand.Visible).toBe(true)
+				expect(hud.cutText.Text).toBe("スマッシュ")
+			end,
+		},
+		{
 			"the arena, the bot avatar and the paddle build",
 			function()
 				local origin = Vector3.new(400, 200, 0)

@@ -16,6 +16,7 @@ local Palette = require(Shared:WaitForChild("Palette"))
 local Matchmaker = require(Shared:WaitForChild("Rank"):WaitForChild("Matchmaker"))
 local S = require(Shared:WaitForChild("Strings"))
 local BallView = require(script.BallView)
+local Fx = require(script.Fx)
 local Hud = require(script.Hud)
 local ArenaLook = require(script.ArenaLook)
 local SeasonFolder = Shared:WaitForChild("Season")
@@ -353,6 +354,36 @@ local function abilityName(id: string): string
 	return S.abilityName(id)
 end
 
+-- The big moment of a special move: cut-in with its name, screen flash and tint, camera punch,
+-- and its own effect in the arena (bolts, a black hole, a pillar of light ...).
+local function specialFx(e: { [string]: any }, color: Color3)
+	local o = origin
+	if not o then
+		return
+	end
+	hud:cutIn(abilityName(e.id), color)
+	shake = 0.45
+	flashFov(12)
+	local side = if e.player == 1 then -1 else 1
+	local ballPos = ball.ball.Position
+	local paddle = o + Vector3.new(side * Config.HitX, Config.HitY, 0)
+	local at = if e.state == "fired" then ballPos else paddle
+	local towards = o + Vector3.new(-side * Config.HitX, Config.HitY, ballPos.Z - o.Z)
+	local seconds: number? = nil
+	if e.id == "TimeSlow" then
+		at = ballPos
+		seconds = Abilities.Tuning.TimeSlow.length
+	elseif e.id == "GravityWell" then
+		local targetSide = if e.target == 1 then -1 else 1
+		at = o + Vector3.new(targetSide * 14, 0.1, 0)
+		Fx.vortex(ball.folder, at, color, math.max((e.untilTime or now()) - now(), 0.5))
+	elseif e.id == "Blink" then
+		local root = if e.player == me then myRoot() else nil
+		at = if root then Vector3.new(root.Position.X, o.Y + 0.2, root.Position.Z) else paddle
+	end
+	Fx.special(ball.folder, camera, e.id, color, at, towards, seconds)
+end
+
 local function onAbilityEvent(e: { [string]: any })
 	local mine = e.player == me
 	local color = Hud.abilityColor(e.id)
@@ -374,6 +405,7 @@ local function onAbilityEvent(e: { [string]: any })
 		end
 	elseif e.state == "fired" or e.state == "used" then
 		hud:announceAbility(S.t("ability.used", { who = who, ability = abilityName(e.id) }), color)
+		specialFx(e, color)
 		if mine then
 			armedId = nil
 			usedThisRally = true
@@ -556,6 +588,9 @@ local function onEvent(e: { [string]: any })
 		elseif e.grade ~= "Miss" then
 			ball:hitEffect(e.grade)
 		end
+		if e.grade == "Perfect" then
+			Fx.perfect(ball.folder, ball.ball.Position, Palette.Grade.Perfect)
+		end
 		if e.rally then
 			hud:setRally(e.rally)
 		end
@@ -621,19 +656,50 @@ RunService.RenderStepped:Connect(function()
 	hud:setAim(currentAim() * screenFlip())
 end)
 
--- Arrow-key movement, after Roblox's controls have set this frame's move (so ours wins).
+-- Roblox's own controls (WASD, the phone stick, the gamepad stick), looked up once. nil when the
+-- player module is not there (tests).
+local controls: any = nil
+local function playerControls(): any
+	if controls == nil then
+		controls = false
+		local scripts = player:FindFirstChild("PlayerScripts")
+		local module = scripts and scripts:FindFirstChild("PlayerModule")
+		if module and module:IsA("ModuleScript") then
+			local ok, pm = pcall(require, module)
+			if ok and type(pm) == "table" and pm.GetControls then
+				controls = pm:GetControls()
+			end
+		end
+	end
+	return if controls then controls else nil
+end
+
+-- During a match the player only moves across the table (left/right on screen), never towards
+-- or away from the net. Runs after Roblox's controls have set this frame's move, and replaces
+-- it: the arrow keys, or the left/right part of whatever Roblox's controls asked for.
 RunService:BindToRenderStep("SpinRiftArrowMove", Enum.RenderPriority.Input.Value + 1, function()
-	local dir = (if arrowRight then 1 else 0) - (if arrowLeft then 1 else 0)
-	if dir == 0 or not origin then
+	if not origin then
 		return
 	end
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		-- straight across the table (world Z), towards the side that is right/left on screen; the
-		-- camera may look a little diagonally, so its right vector is not used directly
-		humanoid:Move(Vector3.new(0, 0, dir * screenFlip()), false)
+	if not humanoid then
+		return
 	end
+	local x = (if arrowRight then 1 else 0) - (if arrowLeft then 1 else 0) -- right on screen
+	if x == 0 then
+		local c = playerControls()
+		if not c then
+			return
+		end
+		local ok, v = pcall(function()
+			return c:GetMoveVector() -- relative to the camera: X is right on screen
+		end)
+		x = if ok and v then v.X else 0
+	end
+	-- straight across the table (world Z); the camera may look a little diagonally, so its right
+	-- vector is not used directly
+	humanoid:Move(Vector3.new(0, 0, x * screenFlip()), false)
 end)
 
 -- Broadcast-style camera behind our own side, following us a little across the table.

@@ -112,6 +112,9 @@ export type Hud = typeof(setmetatable(
 		aim: TextLabel,
 		tutorial: TextLabel,
 		announce: TextLabel,
+		flash: Frame,
+		cutBand: Frame,
+		cutText: TextLabel,
 		slots: { Slot },
 		slotIds: { string },
 		touchButton: TextButton?,
@@ -639,7 +642,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	controls.Name = "Controls"
 	-- bottom left on computers; top left on phones, where the bottom left is the move stick
 	controls.AnchorPoint = Vector2.new(0, if UserInputService.TouchEnabled then 0 else 1)
-	controls.Position = if UserInputService.TouchEnabled then UDim2.new(0, 14, 0, 44) else UDim2.new(0, 14, 1, -76)
+	controls.Position = if UserInputService.TouchEnabled then UDim2.fromOffset(14, 44) else UDim2.new(0, 14, 1, -76)
 	controls.Size = UDim2.fromOffset(270, 102)
 	controls.TextXAlignment = Enum.TextXAlignment.Left
 	controls.TextYAlignment = Enum.TextYAlignment.Top
@@ -707,8 +710,8 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		local parts = { { "◀", 0 }, { "", 1 }, { "▶", 2 } }
 		for _, part in parts do
 			local l = label(t, part[1], 30, INK)
-			l.Position = UDim2.new(part[2] / 3, 0, 0, 0)
-			l.Size = UDim2.new(1 / 3, 0, 1, 0)
+			l.Position = UDim2.fromScale(part[2] / 3, 0)
+			l.Size = UDim2.fromScale(1 / 3, 1)
 			if part[2] == 1 then
 				bind(l, "hud.hit")
 				l.TextSize = 24
@@ -719,7 +722,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 			line.BorderSizePixel = 0
 			line.BackgroundColor3 = INK
 			line.BackgroundTransparency = 0.6
-			line.Position = UDim2.new(x, 0, 0.2, 0)
+			line.Position = UDim2.fromScale(x, 0.2)
 			line.Size = UDim2.new(0, 2, 0.6, 0)
 			line.Parent = t
 		end
@@ -808,6 +811,44 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	announceStroke.Transparency = 0.4
 	announceStroke.Parent = announce
 
+	-- special-move cut-in: a slanted band that sweeps across the screen with the move's name,
+	-- over a quick white flash
+	local flash = Instance.new("Frame")
+	flash.Name = "Flash"
+	flash.BorderSizePixel = 0
+	flash.BackgroundColor3 = Color3.new(1, 1, 1)
+	flash.BackgroundTransparency = 1
+	flash.Size = UDim2.fromScale(1, 1)
+	flash.ZIndex = 20
+	flash.Parent = gui
+	local cutIn = Instance.new("Frame")
+	cutIn.Name = "CutIn"
+	cutIn.BorderSizePixel = 0
+	cutIn.AnchorPoint = Vector2.new(0.5, 0.5)
+	cutIn.Position = UDim2.fromScale(1.6, 0.5)
+	cutIn.Size = UDim2.new(1.4, 0, 0, 96)
+	cutIn.Rotation = -6
+	cutIn.BackgroundTransparency = 0.15
+	cutIn.ZIndex = 21
+	cutIn.Visible = false
+	cutIn.Parent = gui
+	local cutGradient = Instance.new("UIGradient")
+	cutGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.2, 0),
+		NumberSequenceKeypoint.new(0.8, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	cutGradient.Parent = cutIn
+	local cutText = label(cutIn, "", 54, INK)
+	cutText.Size = UDim2.fromScale(1, 1)
+	cutText.ZIndex = 22
+	local cutStroke = Instance.new("UIStroke")
+	cutStroke.Thickness = 3
+	cutStroke.Color = Color3.new(0, 0, 0)
+	cutStroke.Transparency = 0.2
+	cutStroke.Parent = cutText
+
 	gui.Parent = playerGui
 
 	local self = setmetatable({
@@ -856,6 +897,9 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		aim = aim,
 		tutorial = tutorial,
 		announce = announce,
+		flash = flash,
+		cutBand = cutIn,
+		cutText = cutText,
 		slots = slots,
 		slotIds = {},
 		touchButton = touchButton,
@@ -1309,6 +1353,35 @@ function Hud.announceAbility(self: Hud, text: string, color: Color3)
 	self.announce.TextTransparency = 0
 	local info = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.7)
 	TweenService:Create(self.announce, info, { TextTransparency = 1 }):Play()
+end
+
+-- A special move fires: white flash, then the move's name sweeps across the screen on a band
+-- in its colour (in from the right, a short hold in the middle, out to the left).
+function Hud.cutIn(self: Hud, text: string, color: Color3)
+	self.flash.BackgroundTransparency = 0.35
+	TweenService:Create(self.flash, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+	local band = self.cutBand
+	band.BackgroundColor3 = color
+	self.cutText.Text = text
+	band.Visible = true
+	band.Position = UDim2.fromScale(1.6, 0.5)
+	local inTween = TweenService:Create(
+		band,
+		TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Position = UDim2.fromScale(0.5, 0.5) }
+	)
+	inTween:Play()
+	task.delay(0.7, function()
+		local out = TweenService:Create(
+			band,
+			TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{ Position = UDim2.fromScale(-0.6, 0.5) }
+		)
+		out:Play()
+		out.Completed:Once(function()
+			band.Visible = false
+		end)
+	end)
 end
 
 -- The tutorial's current instruction, or nil to hide it.

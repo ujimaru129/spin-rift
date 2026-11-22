@@ -181,6 +181,7 @@ local function newInstance(className: string): any
 	end
 	function methods:Play() end
 	function methods:Stop() end
+	function methods:Emit(_count) end
 	function methods:GetPivot()
 		return props.CFrame or roblox.CFrame.new()
 	end
@@ -551,6 +552,7 @@ function Fake.globals(sharedNode: any)
 		Enum = roblox.Enum,
 		Font = roblox.Font,
 		NumberSequence = roblox.NumberSequence,
+		NumberSequenceKeypoint = roblox.NumberSequenceKeypoint,
 		NumberRange = roblox.NumberRange,
 		ColorSequence = roblox.ColorSequence,
 		TweenInfo = {
