@@ -28,8 +28,8 @@ return function(loader, expect)
 			onRetry = function()
 				table.insert(calls, "retry")
 			end,
-			onSwingButton = function()
-				table.insert(calls, "swing")
+			onSwingButton = function(aim)
+				table.insert(calls, "swing:" .. tostring(aim))
 			end,
 			onAbility = function(slot)
 				table.insert(calls, "ability:" .. slot)
@@ -69,6 +69,36 @@ return function(loader, expect)
 				hud:showResult(false, 0, 2)
 				hud.slots[2].frame.Activated:Fire()
 				expect(calls[#calls]).toBe("ability:2")
+			end,
+		},
+		{
+			"on phones the wide HIT button aims by the part you press, and the ability buttons sit above it",
+			function()
+				expect(Hud.touchAim(10, 0, 228)).toBe(-1)
+				expect(Hud.touchAim(114, 0, 228)).toBe(0)
+				expect(Hud.touchAim(220, 0, 228)).toBe(1)
+				local input = globals.game:GetService("UserInputService")
+				input.TouchEnabled = true
+				local hud, calls = newHud()
+				input.TouchEnabled = false
+				local button = hud.touchButton
+				expect(button ~= nil).toBeTruthy()
+				Fake.set(button, { AbsolutePosition = roblox.Vector2.new(500, 300) })
+				Fake.set(button, { AbsoluteSize = roblox.Vector2.new(228, 104) })
+				local function touchAt(x)
+					button.InputBegan:Fire({
+						UserInputType = roblox.Enum.UserInputType.Touch,
+						Position = roblox.Vector3.new(x, 340, 0),
+					})
+					return calls[#calls]
+				end
+				expect(touchAt(520)).toBe("swing:-1")
+				expect(touchAt(614)).toBe("swing:0")
+				expect(touchAt(715)).toBe("swing:1")
+				-- both ability buttons are above the HIT button, side by side
+				local bar = hud.slots[1].frame.Parent
+				expect(bar.Position.Y.Offset < button.Position.Y.Offset - button.Size.Y.Offset).toBeTruthy()
+				expect(hud.slots[2].frame.Position.X.Offset > hud.slots[1].frame.Position.X.Offset).toBeTruthy()
 			end,
 		},
 		{

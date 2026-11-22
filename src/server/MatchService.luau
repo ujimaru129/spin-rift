@@ -42,7 +42,7 @@ local ARENA_SPACING = 400 -- studs between arenas
 local AUTO_SERVE_AFTER = 5 -- seconds a player may wait before their serve goes in automatically
 -- balls in a row a player may let go by without doing anything before they lose a 1v1 match
 -- (stops two idle players from playing an endless deuce)
-local IDLE_LIMIT = 8
+local IDLE_LIMIT = 4 -- points in a row with no input (a match is only 5 points)
 local MIN_SWING_GAP = 0.15 -- ignore button mashing faster than this
 local WALK_SPEED = 16
 local ZONE_HALF_Z = 8 -- how far across the table a Blink may take a player

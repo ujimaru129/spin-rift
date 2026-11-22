@@ -136,7 +136,12 @@ function Match._award(self: Match, winner: number, reason: string, now: number):
 		if self.games[winner] >= Config.Score.gamesToWinMatch then
 			self.phase = "Over"
 			self.winner = winner
-			table.insert(events, { kind = "MatchOver", winner = winner, games = table.clone(self.games) })
+			table.insert(events, {
+				kind = "MatchOver",
+				winner = winner,
+				games = table.clone(self.games),
+				points = table.clone(self.points),
+			})
 			table.insert(events, self:snapshot())
 			return events
 		end
@@ -358,7 +363,13 @@ function Match._end(self: Match, winner: number, reason: string): { Event }
 	self.shot = nil
 	self.games[winner] = Config.Score.gamesToWinMatch
 	return {
-		{ kind = "MatchOver", winner = winner, games = table.clone(self.games), reason = reason },
+		{
+			kind = "MatchOver",
+			winner = winner,
+			games = table.clone(self.games),
+			points = table.clone(self.points),
+			reason = reason,
+		},
 		self:snapshot(),
 	}
 end

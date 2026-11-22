@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Palette = require(Shared:WaitForChild("Palette"))
 local Abilities = require(Shared:WaitForChild("Rally"):WaitForChild("Abilities"))
+local Config = require(Shared:WaitForChild("Rally"):WaitForChild("Config"))
 local Rating = require(Shared:WaitForChild("Rank"):WaitForChild("Rating"))
 local S = require(Shared:WaitForChild("Strings"))
 local SeasonFolder = Shared:WaitForChild("Season")
@@ -29,7 +30,7 @@ export type Callbacks = {
 	onMode: (mode: string) -> (),
 	onLeave: () -> (),
 	onRetry: () -> (),
-	onSwingButton: () -> (),
+	onSwingButton: (screenAim: number) -> (), -- -1 left, 0 straight, 1 right (on screen)
 	onAbility: (slot: number) -> (),
 	onLeaderboard: (scope: string) -> (),
 	onLanguage: () -> (),
@@ -48,6 +49,19 @@ local function abilityColor(id: string): Color3
 end
 
 local Hud = {}
+
+local TOUCH_HIT_WIDTH = 228
+
+-- Which part of the wide touch HIT button was pressed: -1 (left third), 0 (middle), 1 (right).
+function Hud.touchAim(touchX: number, buttonX: number, buttonWidth: number): number
+	local rel = (touchX - buttonX) / math.max(buttonWidth, 1)
+	if rel < 1 / 3 then
+		return -1
+	elseif rel > 2 / 3 then
+		return 1
+	end
+	return 0
+end
 Hud.__index = Hud
 Hud.abilityColor = abilityColor
 
@@ -673,26 +687,45 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	bind(button(result, "", Palette.TeamA, callbacks.onRetry), "result.again")
 	bind(button(result, "", Palette.TeamB, callbacks.onLeave), "result.menu")
 
-	-- touch swing button
+	-- touch swing button: a wide button in three parts. Where you press it sets the aim
+	-- (left part = left, middle = straight, right part = right, as seen on screen), and the
+	-- swing happens the moment you touch it.
 	local touchButton: TextButton? = nil
 	if UserInputService.TouchEnabled then
 		local t = Instance.new("TextButton")
 		t.Name = "SwingButton"
-		t.TextSize = 26
-		t.FontFace = FONT
-		t.TextColor3 = INK
+		t.Text = ""
+		t.AutoButtonColor = true
 		t.BackgroundColor3 = Palette.TeamA
 		t.BackgroundTransparency = 0.35
 		t.AnchorPoint = Vector2.new(1, 1)
-		t.Position = UDim2.new(1, -36, 1, -150)
-		t.Size = UDim2.fromOffset(112, 112)
+		t.Position = UDim2.new(1, -24, 1, -140)
+		t.Size = UDim2.fromOffset(TOUCH_HIT_WIDTH, 104)
 		t.Parent = match
-		corner(t, 56)
+		corner(t, 24)
 		stroke(t, INK, 0.3)
-		bind(t, "hud.hit")
+		local parts = { { "◀", 0 }, { "", 1 }, { "▶", 2 } }
+		for _, part in parts do
+			local l = label(t, part[1], 30, INK)
+			l.Position = UDim2.new(part[2] / 3, 0, 0, 0)
+			l.Size = UDim2.new(1 / 3, 0, 1, 0)
+			if part[2] == 1 then
+				bind(l, "hud.hit")
+				l.TextSize = 24
+			end
+		end
+		for _, x in { 1 / 3, 2 / 3 } do
+			local line = Instance.new("Frame")
+			line.BorderSizePixel = 0
+			line.BackgroundColor3 = INK
+			line.BackgroundTransparency = 0.6
+			line.Position = UDim2.new(x, 0, 0.2, 0)
+			line.Size = UDim2.new(0, 2, 0.6, 0)
+			line.Parent = t
+		end
 		t.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.Touch then
-				callbacks.onSwingButton()
+				callbacks.onSwingButton(Hud.touchAim(input.Position.X, t.AbsolutePosition.X, t.AbsoluteSize.X))
 			end
 		end)
 		touchButton = t
@@ -743,16 +776,15 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		slots[i] = { frame = b, name = name, cost = cost, key = key, stroke = st }
 	end
 	if UserInputService.TouchEnabled then
-		-- around the swing button on phones, so the right thumb reaches all three:
-		-- ability 1 to its left, ability 2 just above it
+		-- on phones the two ability buttons sit side by side just above the wide HIT button,
+		-- where the right thumb reaches them
 		slotBar.AnchorPoint = Vector2.new(1, 1)
-		slotBar.Position = UDim2.new(1, 0, 1, 0)
-		slotBar.Size = UDim2.fromOffset(300, 400)
-		-- inside this 300x400 box the swing button covers x 152..264, y 138..250
-		local places = { UDim2.fromOffset(20, 166), UDim2.fromOffset(152, 70) }
+		slotBar.Position = UDim2.new(1, -24, 1, -256)
+		slotBar.Size = UDim2.fromOffset(TOUCH_HIT_WIDTH, 56)
+		local w = (TOUCH_HIT_WIDTH - 8) / 2
 		for i, s in slots do
-			s.frame.Position = places[i] or s.frame.Position
-			s.frame.Size = UDim2.fromOffset(if i == 1 then 120 else 112, 56)
+			s.frame.Position = UDim2.fromOffset((i - 1) * (w + 8), 0)
+			s.frame.Size = UDim2.fromOffset(w, 56)
 			s.key.Text = ""
 		end
 	end
@@ -1318,8 +1350,10 @@ function Hud.setScore(self: Hud, snap: { [string]: any }, me: number)
 	local them = if me == 1 then 2 else 1
 	self.myPoints.Text = tostring(snap.points[me])
 	self.theirPoints.Text = tostring(snap.points[them])
-	self.myGames.Text = S.t("hud.games") .. " " .. dots(snap.games[me])
-	self.theirGames.Text = dots(snap.games[them]) .. " " .. S.t("hud.games")
+	-- game dots only mean something when a match has more than one game
+	local manyGames = Config.Score.gamesToWinMatch > 1
+	self.myGames.Text = if manyGames then S.t("hud.games") .. " " .. dots(snap.games[me]) else ""
+	self.theirGames.Text = if manyGames then dots(snap.games[them]) .. " " .. S.t("hud.games") else ""
 	self.myServe.Visible = snap.server == me
 	self.theirServe.Visible = snap.server == them
 	self:setGauge(snap.gauge[me])
@@ -1394,13 +1428,15 @@ function Hud.setPing(self: Hud, ms: number)
 	self.ping.TextColor3 = if ms > 250 then Palette.Grade.Miss elseif ms > 150 then Palette.Grade.Perfect else INK_DIM
 end
 
-function Hud.showResult(self: Hud, won: boolean, myGames: number, theirGames: number, note: string?)
+-- mine/theirs: games won, or the final points when a match is a single game.
+function Hud.showResult(self: Hud, won: boolean, mine: number, theirs: number, note: string?)
 	self.result.Visible = true
 	self.resultNote.Text = note or ""
 	self.resultNote.Visible = note ~= nil
 	self.resultTitle.Text = S.t(if won then "result.win" else "result.lose")
 	self.resultTitle.TextColor3 = if won then Palette.Grade.Perfect else Palette.Grade.Miss
-	self.resultScore.Text = S.t("result.games", { a = myGames, b = theirGames })
+	local key = if Config.Score.gamesToWinMatch > 1 then "result.games" else "result.points"
+	self.resultScore.Text = S.t(key, { a = mine, b = theirs })
 	self.hint.Text = ""
 	self:setTutorial(nil)
 end

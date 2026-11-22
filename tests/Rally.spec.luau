@@ -40,8 +40,8 @@ return function(loader, expect)
 			returnBall(m, 0)
 		end
 		-- now the ball is heading to the loser
-		letPass(m)
-		return m.nextServeAt
+		local events = letPass(m)
+		return m.nextServeAt, events
 	end
 
 	return {
@@ -191,44 +191,60 @@ return function(loader, expect)
 			end,
 		},
 		{
-			"7 points wins a game, and from 6-6 a 2-point lead is needed with serve alternating every point",
+			"a game goes to the set number of points, and from deuce a 2-point lead is needed with serve alternating",
 			function()
 				local m = Match.new(0)
 				local now = 0
-				for _ = 1, 6 do
+				local d = Config.Score.deuceAt
+				for _ = 1, d do
 					now = winPoint(m, 1, now)
 					now = winPoint(m, 2, now)
 				end
-				expect(m.points[1]).toBe(6)
-				expect(m.points[2]).toBe(6)
+				expect(m.points[1]).toBe(d)
+				expect(m.points[2]).toBe(d)
 				local s1 = m.server
-				now = winPoint(m, 1, now) -- 7-6, not a game yet
+				now = winPoint(m, 1, now) -- one ahead: not a game yet
 				expect(m.games[1]).toBe(0)
 				expect(m.server ~= s1).toBeTruthy()
-				now = winPoint(m, 1, now) -- 8-6
+				now = winPoint(m, 1, now) -- two ahead
 				expect(m.games[1]).toBe(1)
-				expect(m.points[1]).toBe(0)
-				expect(m.server).toBe(2) -- the other player serves first in game 2
+				if Config.Score.gamesToWinMatch > 1 then
+					expect(m.points[1]).toBe(0)
+					expect(m.server).toBe(2) -- the other player serves first in the next game
+				else
+					expect(m.phase).toBe("Over")
+					expect(m.winner).toBe(1)
+				end
 			end,
 		},
 		{
-			"two games win the match",
+			"a match is 5 points; winning the set number of games ends it",
 			function()
+				expect(Config.Score.pointsToWinGame).toBe(5)
+				expect(Config.Score.gamesToWinMatch).toBe(1)
 				local m = Match.new(0)
 				local now = 0
-				local last
-				for _ = 1, 14 do
+				local overEvent
+				for _ = 1, 40 do
 					if m.phase == "Over" then
 						break
 					end
-					now = winPoint(m, 2, now)
+					local events
+					now, events = winPoint(m, 2, now)
+					for _, e in events or {} do
+						if e.kind == "MatchOver" then
+							overEvent = e
+						end
+					end
 				end
 				expect(m.phase).toBe("Over")
 				expect(m.winner).toBe(2)
-				expect(m.games[2]).toBe(2)
+				expect(m.games[2]).toBe(Config.Score.gamesToWinMatch)
 				expect(#m:serve(now + 100, 0, 0)).toBe(0)
-				last = m:snapshot()
-				expect(last.games[2]).toBe(2)
+				expect(m:snapshot().games[2]).toBe(Config.Score.gamesToWinMatch)
+				if overEvent then
+					expect(overEvent.points[2]).toBe(Config.Score.pointsToWinGame)
+				end
 			end,
 		},
 		{
@@ -324,8 +340,8 @@ return function(loader, expect)
 					end
 					local w = m.winner
 					local l = Match.other(w)
-					expect(m.games[w]).toBe(2)
-					expect(m.games[l] <= 1).toBeTruthy()
+					expect(m.games[w]).toBe(Config.Score.gamesToWinMatch)
+					expect(m.games[l] < Config.Score.gamesToWinMatch).toBeTruthy()
 				end
 			end,
 		},

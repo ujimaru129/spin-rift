@@ -59,11 +59,12 @@ Config.AimMargin = 1
 -- Clearance the ball must keep over the net.
 Config.NetClearance = 0.4
 
+-- A match is one game to 5 points (shorter matches; was best of 3 games to 7).
 Config.Score = {
-	pointsToWinGame = 7,
-	deuceAt = 6, -- from 6-6, serve alternates every point and a game needs a 2-point lead
+	pointsToWinGame = 5,
+	deuceAt = 4, -- from 4-4, serve alternates every point and a game needs a 2-point lead
 	winBy = 2,
-	gamesToWinMatch = 2, -- best of 3
+	gamesToWinMatch = 1,
 	servesPerTurn = 2,
 }
 

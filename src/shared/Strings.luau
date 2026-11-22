@@ -491,12 +491,12 @@ local T: { [string]: Entry } = {
 		id = "Gerak: ← → (A D)\nArah: tahan ← atau → saat memukul\nPukul: Spasi (J, klik)\nKemampuan: Q, E (K, L)\n(bisa disiapkan sebelum servis)",
 	},
 	["controls.touch"] = {
-		ja = "移動：左のスティック\nコース：スティックを倒した向き\n打つ：「打つ」ボタン\n能力：「打つ」の左と上のボタン\n（能力はサーブ前にも準備できる）",
-		en = "Move: left stick\nAim: the way you push the stick\nHit: HIT button\nAbilities: buttons left of and above HIT\n(arm them before a serve too)",
-		es = "Moverte: stick izquierdo\nApuntar: hacia donde inclinas el stick\nGolpear: botón GOLPE\nHabilidades: botones junto a GOLPE\n(también antes del saque)",
-		pt = "Mover: analógico esquerdo\nMirar: para onde você inclina o analógico\nRebater: botão BATER\nHabilidades: botões ao lado de BATER\n(dá para preparar antes do saque)",
-		ko = "이동: 왼쪽 스틱\n조준: 스틱을 기울인 방향\n치기: '치기' 버튼\n능력: '치기' 옆과 위의 버튼\n(서브 전에도 준비 가능)",
-		id = "Gerak: stik kiri\nArah: ke mana stik kamu miringkan\nPukul: tombol PUKUL\nKemampuan: tombol di samping PUKUL\n(bisa disiapkan sebelum servis)",
+		ja = "移動：左のスティック\n打つ：「打つ」ボタン\nコース：「打つ」の左（◀）・右（▶）を押す\n能力：「打つ」の上のボタン\n（能力はサーブ前にも準備できる）",
+		en = "Move: left stick\nHit: HIT button\nAim: press its left (◀) or right (▶) part\nAbilities: buttons above HIT\n(arm them before a serve too)",
+		es = "Moverte: stick izquierdo\nGolpear: botón GOLPE\nApuntar: toca su lado izquierdo (◀) o derecho (▶)\nHabilidades: botones sobre GOLPE\n(también antes del saque)",
+		pt = "Mover: analógico esquerdo\nRebater: botão BATER\nMirar: toque no lado esquerdo (◀) ou direito (▶)\nHabilidades: botões acima de BATER\n(dá para preparar antes do saque)",
+		ko = "이동: 왼쪽 스틱\n치기: '치기' 버튼\n조준: 버튼의 왼쪽(◀)·오른쪽(▶)을 누르기\n능력: '치기' 위의 버튼\n(서브 전에도 준비 가능)",
+		id = "Gerak: stik kiri\nPukul: tombol PUKUL\nArah: tekan sisi kiri (◀) atau kanan (▶)\nKemampuan: tombol di atas PUKUL\n(bisa disiapkan sebelum servis)",
 	},
 	["controls.gamepad"] = {
 		ja = "移動：左スティック\nコース：右スティック\n打つ：R2\n能力：L1・L2\n（能力はサーブ前にも準備できる）",
@@ -704,6 +704,14 @@ local T: { [string]: Entry } = {
 		pt = "Games {a} - {b}",
 		ko = "게임 {a} - {b}",
 		id = "Gim {a} - {b}",
+	},
+	["result.points"] = {
+		ja = "{a} - {b}",
+		en = "{a} - {b}",
+		es = "{a} - {b}",
+		pt = "{a} - {b}",
+		ko = "{a} - {b}",
+		id = "{a} - {b}",
 	},
 	["result.again"] = {
 		ja = "もう一度",

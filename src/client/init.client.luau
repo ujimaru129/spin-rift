@@ -116,7 +116,9 @@ local function currentAim(): number
 	return 0
 end
 
-local function swing()
+-- screenAim: from the touch HIT button (-1 left, 0 straight, 1 right on screen); otherwise the
+-- aim comes from keys, mouse or sticks (currentAim).
+local function swing(screenAim: number?)
 	local o = origin
 	if not o then
 		return
@@ -128,7 +130,8 @@ local function swing()
 	lastSwingSent = t
 	local root = myRoot()
 	local z = if root then root.Position.Z - o.Z else 0
-	swingRemote:FireServer(t, math.clamp(currentAim(), -1, 1), z)
+	local aim = if screenAim ~= nil then screenAim * screenFlip() else currentAim()
+	swingRemote:FireServer(t, math.clamp(aim, -1, 1), z)
 end
 
 -- Direction for Blink: where the player is walking, or where they aim if standing still.
@@ -577,7 +580,8 @@ local function onEvent(e: { [string]: any })
 			elseif e.reason == "idle" then S.t(if e.winner == me then "result.idleWin" else "result.idleLose")
 			else nil
 		ball:hide()
-		hud:showResult(e.winner == me, e.games[me], e.games[them()], note)
+		local final = if e.points and Config.Score.gamesToWinMatch <= 1 then e.points else e.games
+		hud:showResult(e.winner == me, final[me], final[them()], note)
 	elseif kind == "Left" then
 		clearBarrier(1)
 		clearBarrier(2)
@@ -609,7 +613,8 @@ end)
 
 -- Aim marker: shows which way the next return will go while the ball is in play.
 RunService.RenderStepped:Connect(function()
-	if not origin or not inRally then
+	-- phones aim with the parts of the HIT button, which show ◀ ▶ themselves
+	if not origin or not inRally or UserInputService.TouchEnabled then
 		hud:setAim(nil)
 		return
 	end
@@ -625,12 +630,9 @@ RunService:BindToRenderStep("SpinRiftArrowMove", Enum.RenderPriority.Input.Value
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		-- across the table, in the direction that is right/left on screen
-		local right = camera.CFrame.RightVector
-		local flat = Vector3.new(right.X, 0, right.Z)
-		if flat.Magnitude > 0.01 then
-			humanoid:Move(flat.Unit * dir, false)
-		end
+		-- straight across the table (world Z), towards the side that is right/left on screen; the
+		-- camera may look a little diagonally, so its right vector is not used directly
+		humanoid:Move(Vector3.new(0, 0, dir * screenFlip()), false)
 	end
 end)
 
