@@ -128,7 +128,7 @@ Tiros con efecto, pelotas que se dividen en tres, botes invisibles, tiempo lento
 Te emparejamos con jugadores de tu nivel. Sube de Bronce a Maestro y entra en el top 100 de tu región como Leyenda Rift.
 
 ■ Hazlo tuyo
-Consigue palas, estelas y títulos en el Pase de batalla. El poder no se compra.
+Consigue raquetas, estelas y títulos en el Pase de batalla. El poder no se compra.
 
 Para PC, móvil, tableta y consola. ¿Eres nuevo? ¡Empieza con el tutorial de 1 minuto!
 ```

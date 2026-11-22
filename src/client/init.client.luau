@@ -25,8 +25,9 @@ local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- Japanese for Japanese locales, English for everyone else; the menu button switches it.
-S.setLocale(S.fromLocaleId(LocalizationService.RobloxLocaleId))
+-- The player's own language (English if we don't have it); the menu button switches it.
+-- In Studio the game always starts in Japanese, whatever language Studio itself uses.
+S.setLocale(if RunService:IsStudio() then "ja" else S.fromLocaleId(LocalizationService.RobloxLocaleId))
 
 local requestRemote = Net.get(Net.REQUEST_MATCH)
 local leaveRemote = Net.get(Net.LEAVE_MATCH)
