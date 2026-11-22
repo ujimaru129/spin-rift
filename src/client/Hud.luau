@@ -30,6 +30,9 @@ export type Hud = typeof(setmetatable(
 		menu: Frame,
 		match: Frame,
 		result: Frame,
+		waiting: Frame,
+		ping: TextLabel,
+		resultNote: TextLabel,
 		myPoints: TextLabel,
 		theirPoints: TextLabel,
 		theirName: TextLabel,
@@ -137,7 +140,10 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	vlist(menu, 10)
 	local title = label(menu, "SPIN RIFT", 40, Palette.TeamA)
 	title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
-	label(menu, "練習モード（試作 フェーズ1）", 14, INK_DIM, FONT_REGULAR)
+	label(menu, "試作版（フェーズ2）", 14, INK_DIM, FONT_REGULAR)
+	button(menu, "オンライン対戦（このサーバーの人と）", Palette.Grade.Perfect, function()
+		callbacks.onMode("Online")
+	end)
 	button(menu, "壁打ち", Palette.TeamA, function()
 		callbacks.onMode("Wall")
 	end)
@@ -159,6 +165,25 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	)
 	help.Size = UDim2.new(1, 0, 0, 84)
 	help.TextXAlignment = Enum.TextXAlignment.Left
+
+	-- waiting for an opponent
+	local waiting = panel(gui, "Waiting")
+	waiting.AnchorPoint = Vector2.new(0.5, 0.5)
+	waiting.Position = UDim2.fromScale(0.5, 0.5)
+	waiting.Size = UDim2.new(0, 320, 0, 0)
+	waiting.AutomaticSize = Enum.AutomaticSize.Y
+	waiting.Visible = false
+	vlist(waiting, 10)
+	label(waiting, "相手を待っています…", 22, INK)
+	label(
+		waiting,
+		"このサーバーで、もう1人が「オンライン対戦」を押すと始まります",
+		13,
+		INK_DIM,
+		FONT_REGULAR
+	).Size =
+		UDim2.new(1, 0, 0, 36)
+	button(waiting, "キャンセル", Palette.TeamB, callbacks.onLeave)
 
 	-- match HUD
 	local match = Instance.new("Frame")
@@ -240,6 +265,12 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	stroke(leave, Palette.TeamA, 0.6)
 	leave.Activated:Connect(callbacks.onLeave)
 
+	local ping = label(match, "", 12, INK_DIM, FONT_REGULAR)
+	ping.AnchorPoint = Vector2.new(1, 0)
+	ping.Position = UDim2.new(1, -14, 0, 56)
+	ping.Size = UDim2.fromOffset(140, 16)
+	ping.TextXAlignment = Enum.TextXAlignment.Right
+
 	-- gauge
 	local gauge = panel(match, "Gauge")
 	gauge.AnchorPoint = Vector2.new(0, 1)
@@ -293,6 +324,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	vlist(result, 10)
 	local resultTitle = label(result, "", 40, Palette.Grade.Perfect)
 	local resultScore = label(result, "", 18, INK_DIM, FONT_REGULAR)
+	local resultNote = label(result, "", 14, INK_DIM, FONT_REGULAR)
 	button(result, "もう一度", Palette.TeamA, callbacks.onRetry)
 	button(result, "メニューへ", Palette.TeamB, callbacks.onLeave)
 
@@ -328,6 +360,9 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		menu = menu,
 		match = match,
 		result = result,
+		waiting = waiting,
+		ping = ping,
+		resultNote = resultNote,
 		myPoints = myPoints,
 		theirPoints = theirPoints,
 		theirName = theirName,
@@ -350,13 +385,22 @@ function Hud.showMenu(self: Hud)
 	self.menu.Visible = true
 	self.match.Visible = false
 	self.result.Visible = false
+	self.waiting.Visible = false
 end
 
-function Hud.showMatch(self: Hud, opponentLabel: string)
+function Hud.showWaiting(self: Hud)
+	self.menu.Visible = false
+	self.match.Visible = false
+	self.result.Visible = false
+	self.waiting.Visible = true
+end
+
+function Hud.showMatch(self: Hud, opponentName: string)
 	self.menu.Visible = false
 	self.result.Visible = false
+	self.waiting.Visible = false
 	self.match.Visible = true
-	self.theirName.Text = if opponentLabel == "壁打ち" then "WALL" else "BOT（" .. opponentLabel .. "）"
+	self.theirName.Text = opponentName
 	self.rally.Text = ""
 	self.hint.Text = ""
 	self:setGauge(0)
@@ -423,8 +467,16 @@ function Hud.popupText(self: Hud, text: string, color: Color3)
 	TweenService:Create(self.popup, info, { TextTransparency = 1 }):Play()
 end
 
-function Hud.showResult(self: Hud, won: boolean, myGames: number, theirGames: number)
+-- Round-trip time to the server, in milliseconds.
+function Hud.setPing(self: Hud, ms: number)
+	self.ping.Text = `通信 {math.round(ms)}ms`
+	self.ping.TextColor3 = if ms > 250 then Palette.Grade.Miss elseif ms > 150 then Palette.Grade.Perfect else INK_DIM
+end
+
+function Hud.showResult(self: Hud, won: boolean, myGames: number, theirGames: number, note: string?)
 	self.result.Visible = true
+	self.resultNote.Text = note or ""
+	self.resultNote.Visible = note ~= nil
 	self.resultTitle.Text = if won then "WIN!" else "LOSE"
 	self.resultTitle.TextColor3 = if won then Palette.Grade.Perfect else Palette.Grade.Miss
 	self.resultScore.Text = `ゲーム {myGames} - {theirGames}`

@@ -1,5 +1,5 @@
 --!strict
--- Client entry point: input, camera, ball drawing and HUD for practice matches.
+-- Client entry point: input, camera, ball drawing and HUD for practice and online matches.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,15 +17,15 @@ local Hud = require(script.Hud)
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
-local ME = 1 -- the player is always player 1 (side -1) in practice
-
-local startRemote = Net.get(Net.START_PRACTICE)
-local leaveRemote = Net.get(Net.LEAVE_PRACTICE)
+local requestRemote = Net.get(Net.REQUEST_MATCH)
+local leaveRemote = Net.get(Net.LEAVE_MATCH)
 local swingRemote = Net.get(Net.SWING)
 local matchEvent = Net.get(Net.MATCH_EVENT)
 
 local ball = BallView.new()
 local origin: Vector3? = nil
+local me = 1 -- our player index in the current match (1 stands on side -1)
+local mySide = -1
 local currentMode = "Wall"
 local stickAim = 0
 local shake = 0
@@ -36,26 +36,40 @@ local function now(): number
 	return workspace:GetServerTimeNow()
 end
 
--- Aim across the table, -1..1. Screen-right is +Z with our camera, so map directly.
+local function them(): number
+	return if me == 1 then 2 else 1
+end
+
+local function myRoot(): BasePart?
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return if root and root:IsA("BasePart") then root else nil
+end
+
+-- Aim across the table as a world Z direction, -1..1.
+-- Mouse and right stick aim left/right on screen; the screen's right is +Z or -Z depending on side.
 local function currentAim(): number
+	local screenRightIsPlusZ = camera.CFrame.RightVector:Dot(Vector3.zAxis) >= 0
+	local flip = if screenRightIsPlusZ then 1 else -1
 	if UserInputService.MouseEnabled and not UserInputService.TouchEnabled then
 		local m = UserInputService:GetMouseLocation()
 		local w = camera.ViewportSize.X
-		return math.clamp((m.X / w) * 2 - 1, -1, 1) * 1.4
+		return math.clamp((m.X / w) * 2 - 1, -1, 1) * 1.4 * flip
 	end
 	if math.abs(stickAim) > 0.15 then
-		return stickAim
+		return stickAim * flip
 	end
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		return math.clamp(humanoid.MoveDirection:Dot(camera.CFrame.RightVector) * 1.5, -1, 1)
+		return math.clamp(humanoid.MoveDirection.Z * 1.5, -1, 1)
 	end
 	return 0
 end
 
 local function swing()
-	if not origin then
+	local o = origin
+	if not o then
 		return
 	end
 	local t = now()
@@ -63,19 +77,21 @@ local function swing()
 		return
 	end
 	lastSwingSent = t
-	swingRemote:FireServer(t, math.clamp(currentAim(), -1, 1))
+	local root = myRoot()
+	local z = if root then root.Position.Z - o.Z else 0
+	swingRemote:FireServer(t, math.clamp(currentAim(), -1, 1), z)
 end
 
 local hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 	onMode = function(mode: string)
 		currentMode = mode
-		startRemote:FireServer(mode)
+		requestRemote:FireServer(mode)
 	end,
 	onLeave = function()
 		leaveRemote:FireServer()
 	end,
 	onRetry = function()
-		startRemote:FireServer(currentMode)
+		requestRemote:FireServer(currentMode)
 	end,
 	onSwingButton = swing,
 })
@@ -105,8 +121,8 @@ local function setJump(enabled: boolean)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		humanoid.JumpPower = if enabled then 50 else 0
 		humanoid.UseJumpPower = true
+		humanoid.JumpPower = if enabled then 50 else 0
 	end
 end
 
@@ -116,7 +132,7 @@ local function flashFov(amount: number)
 end
 
 local function serveHint(server: number)
-	if server == ME then
+	if server == me then
 		hud:setHint(
 			if UserInputService.TouchEnabled
 				then "あなたのサーブ：「打つ」をタップ"
@@ -129,25 +145,38 @@ end
 
 local REASON = { miss = "取れなかった", whiff = "空振り", reach = "届かなかった" }
 
+local function endMatchView()
+	origin = nil
+	ball:hide()
+	camera.CameraType = Enum.CameraType.Custom
+	camera.FieldOfView = 70
+	setJump(true)
+end
+
 local function onEvent(e: { [string]: any })
 	local kind = e.kind
-	if kind == "Start" then
+	if kind == "Queued" then
+		hud:showWaiting()
+	elseif kind == "Start" then
+		me = e.you
+		mySide = e.side
 		origin = e.origin
+		cameraZ = 0
 		ball:setOrigin(e.origin)
 		ball:hide()
-		hud:showMatch(e.label)
+		hud:showMatch(e.opponent)
 		camera.CameraType = Enum.CameraType.Scriptable
 		camera.FieldOfView = 52
 		setJump(false)
 	elseif kind == "Score" then
-		hud:setScore(e, ME)
+		hud:setScore(e, me)
 	elseif kind == "ServeWait" then
 		serveHint(e.server)
 	elseif kind == "Shot" then
-		ball:setShot(e.shot)
+		ball:setShot(e.shot, now())
 		hud:setHint("")
 	elseif kind == "Swing" then
-		if e.player == ME then
+		if e.player == me then
 			hud:popupGrade(e.grade, e.offset)
 			if e.grade ~= "Miss" then
 				ball:hitEffect(e.grade)
@@ -165,7 +194,7 @@ local function onEvent(e: { [string]: any })
 		end
 	elseif kind == "Point" then
 		ball:lose(now())
-		local mine = e.winner == ME
+		local mine = e.winner == me
 		hud:popupText(
 			if mine then "POINT!" else (REASON[e.reason] or "失点"),
 			if mine then Palette.TeamA else Palette.Grade.Miss
@@ -173,17 +202,16 @@ local function onEvent(e: { [string]: any })
 		hud:setRally(0)
 	elseif kind == "Game" then
 		hud:popupText(
-			if e.winner == ME then "ゲーム獲得！" else "ゲームを落とした",
+			if e.winner == me then "ゲーム獲得！" else "ゲームを落とした",
 			Palette.Grade.Perfect
 		)
 	elseif kind == "MatchOver" then
-		hud:showResult(e.winner == ME, e.games[ME], e.games[if ME == 1 then 2 else 1])
-	elseif kind == "Left" then
-		origin = nil
+		local note = if e.reason == "forfeit" and e.winner == me then "相手が退出しました" else nil
 		ball:hide()
+		hud:showResult(e.winner == me, e.games[me], e.games[them()], note)
+	elseif kind == "Left" then
+		endMatchView()
 		hud:showMenu()
-		camera.CameraType = Enum.CameraType.Custom
-		setJump(true)
 	end
 end
 matchEvent.OnClientEvent:Connect(onEvent)
@@ -194,20 +222,30 @@ player.CharacterAdded:Connect(function()
 	end
 end)
 
--- Broadcast-style camera behind the player, following them a little across the table.
+-- Round-trip time shown in the corner, including any debug delay set in Studio.
+task.spawn(function()
+	while true do
+		if origin then
+			local debugMs = ReplicatedStorage:GetAttribute(Net.DEBUG_LAG_ATTRIBUTE)
+			local extra = if type(debugMs) == "number" then debugMs else 0
+			hud:setPing(player:GetNetworkPing() * 1000 + extra)
+		end
+		task.wait(1)
+	end
+end)
+
+-- Broadcast-style camera behind our own side, following us a little across the table.
 RunService.RenderStepped:Connect(function(dt)
-	local t = now()
-	ball:update(t, dt)
+	ball:update(now(), dt)
 	local o = origin
 	if not o then
 		return
 	end
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	local z = if root and root:IsA("BasePart") then root.Position.Z - o.Z else 0
+	local root = myRoot()
+	local z = if root then root.Position.Z - o.Z else 0
 	cameraZ += (z - cameraZ) * math.min(dt * 4, 1)
-	local eye = o + Vector3.new(-Config.HitX - 17, 11, cameraZ * 0.55)
-	local focus = o + Vector3.new(2, Config.Table.surfaceY, cameraZ * 0.25)
+	local eye = o + Vector3.new(mySide * (Config.HitX + 17), 11, cameraZ * 0.55)
+	local focus = o + Vector3.new(-mySide * 2, Config.Table.surfaceY, cameraZ * 0.25)
 	local cf = CFrame.lookAt(eye, focus)
 	if shake > 0 then
 		shake = math.max(0, shake - dt)

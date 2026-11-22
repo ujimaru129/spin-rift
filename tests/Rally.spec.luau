@@ -29,7 +29,7 @@ return function(loader, expect)
 
 	-- Lets the receiver miss so the hitter wins the point; returns the events.
 	local function letPass(m)
-		return m:update(Trajectory.arrivalTime(m.shot) + Config.Timing.weak + 0.01)
+		return m:update(Trajectory.arrivalTime(m.shot) + Config.Timing.weak + Config.MissGrace + 0.01)
 	end
 
 	local function winPoint(m, winner, now)
@@ -325,6 +325,96 @@ return function(loader, expect)
 					local l = Match.other(w)
 					expect(m.games[w]).toBe(2)
 					expect(m.games[l] <= 1).toBeTruthy()
+				end
+			end,
+		},
+		{
+			"a swing that arrives late over the network still counts if it was on time",
+			function()
+				local m = Match.new(0)
+				local shot = serveAndGetShot(m, m.nextServeAt)
+				local arrival = Trajectory.arrivalTime(shot)
+				-- the server ticks while the swing is still in flight
+				expect(#m:update(arrival + Config.Timing.weak + 0.05)).toBe(0)
+				local received = arrival + 0.3
+				local t = Judge.trustedSwingTime(arrival + 0.02, received)
+				local events = m:swing(2, t, 0, shot.to.Z)
+				expect(events[1].grade).toBe("Perfect")
+			end,
+		},
+		{
+			"the reported position is used when it is within walking distance of the server's view",
+			function()
+				expect(Judge.trustedPlayerZ(2, 0.5, 0.1)).toBe(2)
+				expect(Judge.trustedPlayerZ(8, 0.5, 0.1)).toBe(0.5)
+				expect(Judge.trustedPlayerZ(nil, 0.5, 0.1)).toBe(0.5)
+				expect(Judge.trustedPlayerZ(0 / 0, 0.5, 0.1)).toBe(0.5)
+			end,
+		},
+		{
+			"leaving the match gives the win to the other player",
+			function()
+				local m = Match.new(0)
+				local events = m:forfeit(1)
+				expect(events[1].kind).toBe("MatchOver")
+				expect(events[1].winner).toBe(2)
+				expect(events[1].reason).toBe("forfeit")
+				expect(m.phase).toBe("Over")
+				expect(#m:forfeit(2)).toBe(0)
+			end,
+		},
+		{
+			"with 200ms round trip, swings that were on time on the player's screen are never lost",
+			function()
+				-- Each player sees a shot one-way-delay after the server sent it and swings at the
+				-- moment the ball reaches them on their own screen (server clock). The swing then
+				-- takes one-way-delay to reach the server.
+				local oneWay = 0.1
+				local random = rng(7)
+				local m = Match.new(0, 1)
+				local dt = 1 / 60
+				local now = m.nextServeAt
+				local pending = {} -- { at = server receive time, player, time, aimZ, z }
+				local function onShot(shot)
+					local receiver = if shot.hitterSide == -1 then 2 else 1
+					-- anywhere from a little early to late-but-legal (the Weak window)
+					local swingAt = Trajectory.arrivalTime(shot) + random(-0.05, 0.22)
+					table.insert(pending, {
+						at = swingAt + oneWay,
+						player = receiver,
+						time = swingAt,
+						aimZ = random(-3, 3),
+						z = shot.to.Z,
+					})
+				end
+				for _, e in m:serve(now, 0, 0) do
+					if e.kind == "Shot" then
+						onShot(e.shot)
+					end
+				end
+				local hits = 0
+				while hits < 60 do
+					now += dt
+					for i = #pending, 1, -1 do
+						local p = pending[i]
+						if now >= p.at then
+							table.remove(pending, i)
+							local t = Judge.trustedSwingTime(p.time, now)
+							for _, e in m:swing(p.player, t, p.aimZ, p.z) do
+								if e.kind == "Shot" then
+									hits += 1
+									onShot(e.shot)
+								elseif e.kind == "Swing" and e.grade == "Miss" then
+									error(`swing judged Miss at offset {e.offset}`)
+								end
+							end
+						end
+					end
+					for _, e in m:update(now) do
+						if e.kind == "Point" then
+							error(`point lost ({e.reason}) after {hits} hits`)
+						end
+					end
 				end
 			end,
 		},

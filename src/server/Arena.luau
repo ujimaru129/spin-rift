@@ -190,11 +190,11 @@ local function buildSkyline(model: Model, o: Vector3, seed: number)
 	end
 end
 
--- Invisible walls that keep the player in their half of the floor.
+-- Invisible walls that keep each player in their own half of the floor.
 local function buildZone(model: Model, o: Vector3)
-	local minX, maxX = -18.5, -Config.HitX + 0.5
+	local near, far = Config.HitX - 0.5, 18.5 -- |X| range a player may stand in
 	local halfZ = 8.5
-	local cx, w = (minX + maxX) / 2, maxX - minX
+	local w = far - near
 	local function wall(size: Vector3, at: Vector3)
 		part(model, {
 			name = "ZoneWall",
@@ -204,10 +204,13 @@ local function buildZone(model: Model, o: Vector3)
 			transparency = 1,
 		})
 	end
-	wall(Vector3.new(1, 20, halfZ * 2 + 2), Vector3.new(minX - 0.5, 10, 0))
-	wall(Vector3.new(1, 20, halfZ * 2 + 2), Vector3.new(maxX + 0.5, 10, 0))
-	wall(Vector3.new(w, 20, 1), Vector3.new(cx, 10, halfZ + 0.5))
-	wall(Vector3.new(w, 20, 1), Vector3.new(cx, 10, -halfZ - 0.5))
+	for _, side in { -1, 1 } do
+		local cx = side * (near + far) / 2
+		wall(Vector3.new(1, 20, halfZ * 2 + 2), Vector3.new(side * (far + 0.5), 10, 0))
+		wall(Vector3.new(1, 20, halfZ * 2 + 2), Vector3.new(side * (near - 0.5), 10, 0))
+		wall(Vector3.new(w, 20, 1), Vector3.new(cx, 10, halfZ + 0.5))
+		wall(Vector3.new(w, 20, 1), Vector3.new(cx, 10, -halfZ - 0.5))
+	end
 end
 
 function Arena.build(origin: Vector3, seed: number): Model
@@ -221,10 +224,10 @@ function Arena.build(origin: Vector3, seed: number): Model
 	return model
 end
 
--- Where the player stands at the start of a point.
-function Arena.playerSpawn(origin: Vector3): CFrame
-	local at = origin + Vector3.new(-14, 3.5, 0)
-	return CFrame.lookAt(at, at + Vector3.xAxis)
+-- Where a player on `side` (-1 or 1) stands at the start, facing the table.
+function Arena.playerSpawn(origin: Vector3, side: number): CFrame
+	local at = origin + Vector3.new(side * 14, 3.5, 0)
+	return CFrame.lookAt(at, at - Vector3.xAxis * side)
 end
 
 -- The opponent avatar: a shell-and-neon athlete built from Parts, facing the table.

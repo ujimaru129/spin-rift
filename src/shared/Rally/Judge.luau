@@ -42,4 +42,18 @@ function Judge.trustedSwingTime(reported: number, receivedAt: number): number
 	return math.clamp(reported, receivedAt - Config.MaxReportedLag, receivedAt)
 end
 
+-- Where the server should treat the player as standing. The client reports its own position,
+-- which is up to date on its screen, while the server only sees it after the network delay.
+-- The report is trusted when it is within what the player could have walked in that time.
+function Judge.trustedPlayerZ(reported: number?, serverZ: number, ping: number): number
+	if reported == nil or reported ~= reported then
+		return serverZ
+	end
+	local tolerance = Config.PositionToleranceBase + Config.PositionTolerancePerSecond * math.max(ping, 0)
+	if math.abs(reported - serverZ) <= tolerance then
+		return reported
+	end
+	return serverZ
+end
+
 return Judge

@@ -171,10 +171,30 @@ end
 -- Call every frame. Awards the point when the receiver lets the ball go past.
 function Match.update(self: Match, now: number): { Event }
 	local shot = self.shot
-	if self.phase == "Rally" and shot and now > Trajectory.arrivalTime(shot) + Config.Timing.weak then
+	if
+		self.phase == "Rally"
+		and shot
+		and now > Trajectory.arrivalTime(shot) + Config.Timing.weak + Config.MissGrace
+	then
 		return self:_award(Match.other(self.receiver), "miss", now)
 	end
 	return {}
+end
+
+-- A player left. The other one wins the match.
+function Match.forfeit(self: Match, loser: number): { Event }
+	if self.phase == "Over" then
+		return {}
+	end
+	local winner = Match.other(loser)
+	self.phase = "Over"
+	self.winner = winner
+	self.shot = nil
+	self.games[winner] = Config.Score.gamesToWinMatch
+	return {
+		{ kind = "MatchOver", winner = winner, games = table.clone(self.games), reason = "forfeit" },
+		self:snapshot(),
+	}
 end
 
 return Match

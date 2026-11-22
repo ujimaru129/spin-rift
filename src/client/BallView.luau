@@ -27,6 +27,8 @@ export type BallView = typeof(setmetatable(
 		lostAt: number?, -- set when the point ended: the ball flies on and fades
 		lastPos: Vector3,
 		velocity: Vector3,
+		receivedAt: number,
+		lateBy: number,
 	},
 	BallView
 ))
@@ -107,6 +109,8 @@ function BallView.new(): BallView
 		lostAt = nil :: number?,
 		lastPos = Vector3.zero,
 		velocity = Vector3.zero,
+		receivedAt = 0,
+		lateBy = 0,
 	}, BallView)
 end
 
@@ -114,8 +118,14 @@ function BallView.setOrigin(self: BallView, origin: Vector3)
 	self.origin = origin
 end
 
-function BallView.setShot(self: BallView, shot: Trajectory.Shot)
+-- A shot reaches this client a little after it started on the server. Instead of jumping the
+-- ball ahead, it starts from the paddle and catches up with the real path over this many seconds.
+local CATCH_UP = 0.2
+
+function BallView.setShot(self: BallView, shot: Trajectory.Shot, now: number)
 	self.shot = shot
+	self.receivedAt = now
+	self.lateBy = math.clamp(now - shot.startTime, 0, 0.35)
 	self.bounced = false
 	self.lostAt = nil
 	local color = Palette.Shot[shot.kind] or Color3.new(1, 1, 1)
@@ -189,7 +199,9 @@ function BallView.update(self: BallView, now: number, dt: number)
 			return
 		end
 	else
-		local s = Trajectory.progressAt(shot, now)
+		-- while catching up, draw the ball slightly behind the true time
+		local behind = self.lateBy * math.max(0, 1 - (now - self.receivedAt) / CATCH_UP)
+		local s = Trajectory.progressAt(shot, now - behind)
 		if s > 1 then
 			-- past the paddle and nobody hit it yet: keep flying along the end direction
 			local tail = Trajectory.positionAtProgress(shot, 1)
@@ -202,7 +214,7 @@ function BallView.update(self: BallView, now: number, dt: number)
 		if dt > 0 then
 			self.velocity = (pos - self.lastPos) / dt
 		end
-		if not self.bounced and now >= Trajectory.bounceTime(shot) then
+		if not self.bounced and now - behind >= Trajectory.bounceTime(shot) then
 			self.bounced = true
 			local b = self.origin + shot.bounce - Vector3.new(0, Config.Ball.radius - 0.05, 0)
 			self:ring(b, Palette.Shot[shot.kind] or Color3.new(1, 1, 1), 2.2, Vector3.yAxis)

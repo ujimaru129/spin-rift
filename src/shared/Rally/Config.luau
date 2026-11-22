@@ -77,4 +77,13 @@ Config.GamePause = 3
 -- A client's reported swing time is trusted only within this many seconds before the server got it.
 Config.MaxReportedLag = 0.35
 
+-- After the ball passes a player, the server waits this long before giving the point away,
+-- so a swing that was on time but is still travelling over the network can arrive.
+Config.MissGrace = 0.35
+
+-- How far (studs) a player's own reported position may differ from where the server sees them,
+-- per second of their ping. Characters walk at 16 studs/s by default.
+Config.PositionTolerancePerSecond = 18
+Config.PositionToleranceBase = 1.5
+
 return Config
