@@ -83,7 +83,7 @@ function RankedRoom.start(api: Api)
 			Players:GetPlayerByUserId(expected[2].userId) :: Player,
 		}
 		api.startRanked(players, { expected[1].loadout, expected[2].loadout }, function(winner, reason)
-			local leaver = if reason == "forfeit" then (if winner == 1 then 2 else 1) else nil
+			local leaver = if reason == "forfeit" or reason == "idle" then (if winner == 1 then 2 else 1) else nil
 			RankedResult.finish(sides, winner, leaver, api.fire)
 			task.delay(BACK_TO_LOBBY_AFTER, function()
 				backToLobby(Players:GetPlayers())

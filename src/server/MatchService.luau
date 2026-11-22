@@ -40,6 +40,9 @@ local TUTORIAL = "Tutorial"
 local TUTORIAL_RETURNS = 3 -- returns needed in the first tutorial step
 local ARENA_SPACING = 400 -- studs between arenas
 local AUTO_SERVE_AFTER = 5 -- seconds a player may wait before their serve goes in automatically
+-- balls in a row a player may let go by without doing anything before they lose a 1v1 match
+-- (stops two idle players from playing an endless deuce)
+local IDLE_LIMIT = 8
 local MIN_SWING_GAP = 0.15 -- ignore button mashing faster than this
 local WALK_SPEED = 16
 local ZONE_HALF_Z = 8 -- how far across the table a Blink may take a player
@@ -338,12 +341,10 @@ local function begin(
 		slot = slot,
 		origin = origin,
 		arena = Arena.build(origin, slot, arenaDef.id),
-		match = Match.new(
-			now(),
-			firstServer,
-			{ seats[1].loadout, seats[2].loadout },
-			{ windAt = if windy then Arenas.windAt else nil }
-		),
+		match = Match.new(now(), firstServer, { seats[1].loadout, seats[2].loadout }, {
+			windAt = if windy then Arenas.windAt else nil,
+			idleLimit = if mode == ONLINE or mode == RANKED then IDLE_LIMIT else nil,
+		}),
 		seats = seats,
 		onOver = onOver,
 	}
@@ -442,7 +443,7 @@ local function tryPair()
 end
 
 -- A ranked match between two players in this server. onOver gets the winner (1 or 2) and the
--- reason ("forfeit" if someone left).
+-- reason ("forfeit" if someone left, "idle" if someone stopped playing).
 function MatchService.startRanked(players: { Player }, loadouts: { { string } }, onOver: (number, string?) -> ())
 	for _, p in players do
 		RankedQueue.leave(p)
@@ -487,7 +488,7 @@ local function startLocalRanked(players: { Player }, entries: { any })
 		table.insert(sides, { userId = e.userId, rating = e.rating, games = e.games, region = e.region })
 	end
 	MatchService.startRanked(players, { entries[1].loadout, entries[2].loadout }, function(winner, reason)
-		local leaver = if reason == "forfeit" then (if winner == 1 then 2 else 1) else nil
+		local leaver = if reason == "forfeit" or reason == "idle" then (if winner == 1 then 2 else 1) else nil
 		RankedResult.finish(sides, winner, leaver, fire)
 		for _, p in players do
 			if p.Parent then
@@ -649,7 +650,7 @@ local function step(dt: number)
 			if seat.bot then
 				events = m:serve(t, seat.bot.z, seat.bot:pickAim())
 			elseif t >= m.nextServeAt + AUTO_SERVE_AFTER then
-				events = m:serve(t, seatZ(session, seat), 0)
+				events = m:serve(t, seatZ(session, seat), 0, true)
 			end
 		end
 		for _, seat in session.seats do

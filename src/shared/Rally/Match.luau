@@ -35,6 +35,8 @@ export type Match = typeof(setmetatable(
 		slowedUntil: { number }, -- Gravity Well: server time each player's movement is slowed until
 		whiffed: Trajectory.Shot?, -- a barrier-protected miss: no second swing at the same ball
 		windAt: ((time: number) -> number)?, -- arena wind (casual Sakura Float), nil for none
+		idle: { number }, -- points each player has lost in a row without doing anything
+		idleLimit: number?, -- that many idle points in a row loses the match (nil = no limit)
 	},
 	Match
 ))
@@ -47,7 +49,10 @@ function Match.other(index: number): number
 	return if index == 1 then 2 else 1
 end
 
-export type Options = { windAt: ((time: number) -> number)? }
+-- idleLimit: a player who lets this many balls go by in a row without swinging, serving by
+-- hand or using an ability loses the match (reason "idle"). For player-vs-player matches,
+-- so two players who both walk away cannot keep a deuce going forever.
+export type Options = { windAt: ((time: number) -> number)?, idleLimit: number? }
 
 function Match.new(now: number, firstServer: number?, loadouts: { { string } }?, options: Options?): Match
 	local first = firstServer or 1
@@ -72,6 +77,8 @@ function Match.new(now: number, firstServer: number?, loadouts: { { string } }?,
 		slowedUntil = { 0, 0 },
 		whiffed = nil :: Trajectory.Shot?,
 		windAt = if options then options.windAt else nil,
+		idle = { 0, 0 },
+		idleLimit = if options then options.idleLimit else nil,
 	}, Match)
 end
 
@@ -91,9 +98,13 @@ function Match.canServe(self: Match, now: number): boolean
 end
 
 -- The current server puts the ball in play. fromZ = where across the table they stand.
-function Match.serve(self: Match, now: number, fromZ: number, aimZ: number): { Event }
+-- auto = the server put it in for a player who did not serve in time (not player activity).
+function Match.serve(self: Match, now: number, fromZ: number, aimZ: number, auto: boolean?): { Event }
 	if not self:canServe(now) then
 		return {}
+	end
+	if not auto then
+		self.idle[self.server] = 0
 	end
 	local side = Match.sideOf(self.server)
 	local from = Vector3.new(side * Config.HitX, Config.HitY, fromZ)
@@ -209,6 +220,7 @@ function Match.swing(self: Match, index: number, time: number, aimZ: number, pla
 	if offset < -Config.IgnoreEarlierThan then
 		return {}
 	end
+	self.idle[index] = 0
 	local grade = Judge.grade(offset, Trajectory.windowScale(shot))
 	local reached = Judge.inReach(shot.to.Z, playerZ)
 	if grade == "Miss" or not reached then
@@ -239,6 +251,7 @@ function Match.useAbility(self: Match, index: number, slot: number, now: number,
 	if not id or not def then
 		return {}
 	end
+	self.idle[index] = 0
 	if self.phase ~= "Rally" then
 		return deny(index, id, "notRally")
 	end
@@ -325,9 +338,26 @@ function Match.update(self: Match, now: number): { Event }
 		return events
 	end
 	if now > arrival + Config.Timing.weak + Config.MissGrace then
+		self.idle[r] += 1
+		local limit = self.idleLimit
+		if limit and self.idle[r] >= limit then
+			return self:_end(Match.other(r), "idle")
+		end
 		return self:_award(Match.other(r), "miss", now)
 	end
 	return {}
+end
+
+-- Ends the match early: `winner` wins with the full number of games.
+function Match._end(self: Match, winner: number, reason: string): { Event }
+	self.phase = "Over"
+	self.winner = winner
+	self.shot = nil
+	self.games[winner] = Config.Score.gamesToWinMatch
+	return {
+		{ kind = "MatchOver", winner = winner, games = table.clone(self.games), reason = reason },
+		self:snapshot(),
+	}
 end
 
 -- A player left. The other one wins the match.
@@ -335,15 +365,7 @@ function Match.forfeit(self: Match, loser: number): { Event }
 	if self.phase == "Over" then
 		return {}
 	end
-	local winner = Match.other(loser)
-	self.phase = "Over"
-	self.winner = winner
-	self.shot = nil
-	self.games[winner] = Config.Score.gamesToWinMatch
-	return {
-		{ kind = "MatchOver", winner = winner, games = table.clone(self.games), reason = "forfeit" },
-		self:snapshot(),
-	}
+	return self:_end(Match.other(loser), "forfeit")
 end
 
 return Match

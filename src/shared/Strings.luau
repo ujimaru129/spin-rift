@@ -688,6 +688,22 @@ local T: { [string]: Entry } = {
 		ko = "상대가 나갔습니다",
 		id = "Lawanmu keluar",
 	},
+	["result.idleWin"] = {
+		ja = "相手が操作していなかったため勝ち",
+		en = "Your opponent stopped playing",
+		es = "Tu rival dejó de jugar",
+		pt = "Seu oponente parou de jogar",
+		ko = "상대가 조작하지 않아 승리",
+		id = "Lawanmu berhenti bermain",
+	},
+	["result.idleLose"] = {
+		ja = "操作がなかったため負け",
+		en = "You stopped playing, so you lost",
+		es = "Dejaste de jugar y perdiste",
+		pt = "Você parou de jogar e perdeu",
+		ko = "조작하지 않아 패배",
+		id = "Kamu berhenti bermain, jadi kalah",
+	},
 	["result.rating"] = {
 		ja = "レート {before} → {after}（{delta}）",
 		en = "Rating {before} → {after} ({delta})",

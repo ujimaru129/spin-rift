@@ -365,6 +365,62 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"two idle players cannot keep a deuce going forever",
+			function()
+				local limit = 8
+				local m = Match.new(0, 1, nil, { idleLimit = limit })
+				local over = nil
+				for _ = 1, 100 do
+					m:serve(m.nextServeAt, 0, 0, true) -- auto-serves only
+					for _, e in m:update(Trajectory.arrivalTime(m.shot) + 1) do
+						if e.kind == "MatchOver" then
+							over = e
+						end
+					end
+					if over then
+						break
+					end
+				end
+				expect(over ~= nil).toBe(true)
+				expect(over.reason).toBe("idle")
+				expect(m.phase).toBe("Over")
+			end,
+		},
+		{
+			"a player who swings, serves or uses an ability is not idle",
+			function()
+				local m = Match.new(0, 1, nil, { idleLimit = 3 })
+				for _ = 1, 10 do
+					if m.phase == "Over" then
+						break
+					end
+					if m.server == 1 then
+						m:serve(m.nextServeAt, 0, 0) -- player 1 serves by hand
+					else
+						m:serve(m.nextServeAt, 0, 0, true)
+						-- player 1 swings (and misses): still playing
+						m:swing(1, Trajectory.arrivalTime(m.shot) + 0.4, 0, 0)
+					end
+					if m.phase == "Rally" then
+						m:update(Trajectory.arrivalTime(m.shot) + 1)
+					end
+					expect(m.phase ~= "Over" or m.winner == 1).toBe(true)
+				end
+				expect(m.idle[1]).toBe(0)
+			end,
+		},
+		{
+			"without an idle limit (practice, Bot) idle points never end the match early",
+			function()
+				local m = Match.new(0, 1)
+				for _ = 1, 20 do
+					m:serve(m.nextServeAt, 0, 0, true)
+					m:update(Trajectory.arrivalTime(m.shot) + 1)
+				end
+				expect(m.phase).toBe("Paused")
+			end,
+		},
+		{
 			"with 200ms round trip, swings that were on time on the player's screen are never lost",
 			function()
 				-- Each player sees a shot one-way-delay after the server sent it and swings at the

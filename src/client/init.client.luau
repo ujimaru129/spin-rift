@@ -505,7 +505,10 @@ local function onEvent(e: { [string]: any })
 	elseif kind == "Game" then
 		hud:popupText(S.t(if e.winner == me then "game.won" else "game.lost"), Palette.Grade.Perfect)
 	elseif kind == "MatchOver" then
-		local note = if e.reason == "forfeit" and e.winner == me then S.t("result.forfeit") else nil
+		local note = if e.reason == "forfeit" and e.winner == me
+			then S.t("result.forfeit")
+			elseif e.reason == "idle" then S.t(if e.winner == me then "result.idleWin" else "result.idleLose")
+			else nil
 		ball:hide()
 		hud:showResult(e.winner == me, e.games[me], e.games[them()], note)
 	elseif kind == "Left" then
