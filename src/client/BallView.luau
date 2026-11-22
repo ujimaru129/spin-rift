@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local RallyFolder = Shared:WaitForChild("Rally")
 local Config = require(RallyFolder:WaitForChild("Config"))
 local Trajectory = require(RallyFolder:WaitForChild("Trajectory"))
+local Abilities = require(RallyFolder:WaitForChild("Abilities"))
 local Palette = require(Shared:WaitForChild("Palette"))
 
 local BallView = {}
@@ -29,6 +30,8 @@ export type BallView = typeof(setmetatable(
 		velocity: Vector3,
 		receivedAt: number,
 		lateBy: number,
+		ghosts: { Part },
+		baseColor: Color3,
 	},
 	BallView
 ))
@@ -97,6 +100,24 @@ function BallView.new(): BallView
 	shadow.CastShadow = false
 	shadow.Parent = folder
 
+	-- Phantom copies: same look as the ball, no light and no shadow on the table
+	local ghosts: { Part } = {}
+	for i = 1, 2 do
+		local g = ball:Clone()
+		g.Name = "Phantom" .. i
+		local pl = g:FindFirstChildOfClass("PointLight")
+		if pl then
+			pl:Destroy()
+		end
+		g.Transparency = 1
+		local gt = g:FindFirstChildOfClass("Trail")
+		if gt then
+			gt.Enabled = false
+		end
+		g.Parent = folder
+		ghosts[i] = g
+	end
+
 	return setmetatable({
 		folder = folder,
 		ball = ball,
@@ -111,6 +132,8 @@ function BallView.new(): BallView
 		velocity = Vector3.zero,
 		receivedAt = 0,
 		lateBy = 0,
+		ghosts = ghosts,
+		baseColor = Color3.new(1, 1, 1),
 	}, BallView)
 end
 
@@ -128,12 +151,40 @@ function BallView.setShot(self: BallView, shot: Trajectory.Shot, now: number)
 	self.lateBy = math.clamp(now - shot.startTime, 0, 0.35)
 	self.bounced = false
 	self.lostAt = nil
-	local color = Palette.Shot[shot.kind] or Color3.new(1, 1, 1)
+	self:_style(shot)
+end
+
+-- Time Slow changed the shot in flight: keep drawing it smoothly from where it is.
+function BallView.updateShot(self: BallView, shot: Trajectory.Shot)
+	self.shot = shot
+	self:_style(shot)
+end
+
+local function abilityColor(id: string?): Color3?
+	local def = if id then Abilities.get(id) else nil
+	return if def then Color3.fromRGB(def.rgb[1], def.rgb[2], def.rgb[3]) else nil
+end
+
+function BallView._style(self: BallView, shot: Trajectory.Shot)
+	local fx = shot.effects
+	local color = abilityColor(fx.ability) or Palette.Shot[shot.kind] or Color3.new(1, 1, 1)
+	self.baseColor = color
 	self.trail.Color = ColorSequence.new(color)
+	self.trail.Lifetime = if fx.smash then 0.35 else 0.22
 	self.light.Color = color
+	self.light.Brightness = if fx.ability then 5 else 2.5
 	self.ball.Color = color:Lerp(Color3.new(1, 1, 1), 0.6)
 	self.ball.Transparency = 0
 	self.trail.Enabled = true
+	for _, g in self.ghosts do
+		g.Color = self.ball.Color
+		g.Transparency = if fx.phantom then 0 else 1
+		local gt = g:FindFirstChildOfClass("Trail")
+		if gt then
+			gt.Color = self.trail.Color
+			gt.Enabled = fx.phantom == true
+		end
+	end
 end
 
 -- The point ended: let the ball fly on along its last direction and fade out.
@@ -149,6 +200,54 @@ function BallView.hide(self: BallView)
 	self.ball.Transparency = 1
 	self.shadow.Transparency = 1
 	self.trail.Enabled = false
+	for _, g in self.ghosts do
+		g.Transparency = 1
+		local gt = g:FindFirstChildOfClass("Trail")
+		if gt then
+			gt.Enabled = false
+		end
+	end
+end
+
+-- A translucent neon wall in front of a player's paddle while their Rift Barrier is up.
+function BallView.barrierWall(self: BallView, side: number, color: Color3): Part
+	local wall = Instance.new("Part")
+	wall.Name = "RiftBarrier"
+	wall.Anchored = true
+	wall.CanCollide = false
+	wall.CanQuery = false
+	wall.CastShadow = false
+	wall.Material = Enum.Material.ForceField
+	wall.Color = color
+	wall.Size = Vector3.new(0.3, 6, Config.Table.halfWidth * 2 + 4)
+	wall.CFrame = CFrame.new(self.origin + Vector3.new(side * (Config.HitX + 1.2), Config.Table.surfaceY + 2, 0))
+	wall.Parent = self.folder
+	return wall
+end
+
+-- A glowing ring on the floor of one side, for Gravity Well.
+function BallView.floorRing(self: BallView, side: number, color: Color3, seconds: number)
+	local r = Instance.new("Part")
+	r.Shape = Enum.PartType.Cylinder
+	r.Material = Enum.Material.Neon
+	r.Color = color
+	r.Transparency = 0.4
+	r.Anchored = true
+	r.CanCollide = false
+	r.CanQuery = false
+	r.CastShadow = false
+	r.Size = Vector3.new(0.1, 12, 12)
+	r.CFrame = CFrame.new(self.origin + Vector3.new(side * 14, 0.08, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	r.Parent = self.folder
+	TweenService:Create(r, TweenInfo.new(seconds, Enum.EasingStyle.Linear), { Transparency = 1 }):Play()
+	task.delay(seconds, function()
+		r:Destroy()
+	end)
+end
+
+function BallView.flashAt(self: BallView, worldPos: Vector3, color: Color3)
+	self:ring(worldPos, color, 6, Vector3.yAxis)
+	sound(self.folder, 1.6, 0.5)
 end
 
 -- An expanding neon ring, used for hits and bounces.
@@ -214,9 +313,29 @@ function BallView.update(self: BallView, now: number, dt: number)
 		if dt > 0 then
 			self.velocity = (pos - self.lastPos) / dt
 		end
+		-- Phantom copies drift apart and come back together at the paddle
+		if shot.effects.phantom then
+			local sp = math.clamp(s, 0, 1)
+			local spread = Abilities.Tuning.Phantom.spread * math.sin(math.pi * sp)
+			for i, g in self.ghosts do
+				local sign = if i == 1 then -1 else 1
+				g.CFrame = CFrame.new(pos + Vector3.new(0, 0, sign * spread))
+				g.Transparency = 0.15 + 0.15 * math.sin(now * 30 + i)
+			end
+		end
+		-- Blind Bound: invisible until it bounces (the shadow on the table still shows)
+		local hidden = shot.effects.blind == true and not self.bounced
+		self.ball.Transparency = if hidden then 1 else 0
+		self.trail.Enabled = not hidden
+		-- Time Slow: the ball turns blue while it is slowed
+		local fx = shot.effects
+		local slowed = fx.slowStart ~= nil and now >= (fx.slowStart :: number) and now < (fx.slowEnd :: number)
+		local tint = if slowed then abilityColor("TimeSlow") :: Color3 else self.baseColor
+		self.trail.Color = ColorSequence.new(tint)
+		self.light.Color = tint
 		if not self.bounced and now - behind >= Trajectory.bounceTime(shot) then
 			self.bounced = true
-			local b = self.origin + shot.bounce - Vector3.new(0, Config.Ball.radius - 0.05, 0)
+			local b = self.origin + Trajectory.bouncePoint(shot) - Vector3.new(0, Config.Ball.radius - 0.05, 0)
 			self:ring(b, Palette.Shot[shot.kind] or Color3.new(1, 1, 1), 2.2, Vector3.yAxis)
 			sound(self.ball, 0.75, 0.35)
 		end

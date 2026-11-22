@@ -5,7 +5,9 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Palette = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Palette"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Palette = require(Shared:WaitForChild("Palette"))
+local Abilities = require(Shared:WaitForChild("Rally"):WaitForChild("Abilities"))
 
 local FONT = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
 local FONT_REGULAR = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
@@ -19,10 +21,19 @@ export type Callbacks = {
 	onLeave: () -> (),
 	onRetry: () -> (),
 	onSwingButton: () -> (),
+	onAbility: (slot: number) -> (),
 }
+
+export type Slot = { frame: TextButton, name: TextLabel, cost: TextLabel, key: TextLabel, stroke: UIStroke }
+
+local function abilityColor(id: string): Color3
+	local def = Abilities.get(id)
+	return if def then Color3.fromRGB(def.rgb[1], def.rgb[2], def.rgb[3]) else INK
+end
 
 local Hud = {}
 Hud.__index = Hud
+Hud.abilityColor = abilityColor
 
 export type Hud = typeof(setmetatable(
 	{} :: {
@@ -48,6 +59,12 @@ export type Hud = typeof(setmetatable(
 		resultTitle: TextLabel,
 		resultScore: TextLabel,
 		touchButton: TextButton?,
+		loadout: { string },
+		pickChips: { [string]: TextButton },
+		pickInfo: TextLabel,
+		slots: { Slot },
+		slotIds: { string },
+		announce: TextLabel,
 	},
 	Hud
 ))
@@ -135,12 +152,15 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local menu = panel(gui, "Menu")
 	menu.AnchorPoint = Vector2.new(0.5, 0.5)
 	menu.Position = UDim2.fromScale(0.5, 0.5)
-	menu.Size = UDim2.new(0, 340, 0, 0)
+	menu.Size = UDim2.new(0.94, 0, 0, 0)
+	local menuMax = Instance.new("UISizeConstraint")
+	menuMax.MaxSize = Vector2.new(400, math.huge)
+	menuMax.Parent = menu
 	menu.AutomaticSize = Enum.AutomaticSize.Y
 	vlist(menu, 10)
 	local title = label(menu, "SPIN RIFT", 40, Palette.TeamA)
 	title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
-	label(menu, "試作版（フェーズ2）", 14, INK_DIM, FONT_REGULAR)
+	label(menu, "試作版（フェーズ3）", 14, INK_DIM, FONT_REGULAR)
 	button(menu, "オンライン対戦（このサーバーの人と）", Palette.Grade.Perfect, function()
 		callbacks.onMode("Online")
 	end)
@@ -156,6 +176,23 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	button(menu, "Bot と対戦：つよい", Palette.Grade.Perfect, function()
 		callbacks.onMode("Hard")
 	end)
+	-- ability picker
+	local pickTitle = label(menu, "能力を2つ選ぶ", 14, INK, FONT)
+	pickTitle.TextXAlignment = Enum.TextXAlignment.Left
+	local grid = Instance.new("Frame")
+	grid.BackgroundTransparency = 1
+	grid.Size = UDim2.new(1, 0, 0, 4 * 36 + 3 * 6)
+	grid.Parent = menu
+	local gl = Instance.new("UIGridLayout")
+	gl.CellSize = UDim2.new(0.5, -3, 0, 36)
+	gl.CellPadding = UDim2.fromOffset(6, 6)
+	gl.SortOrder = Enum.SortOrder.LayoutOrder
+	gl.Parent = grid
+	local pickInfo = label(menu, "", 12, INK_DIM, FONT_REGULAR)
+	pickInfo.Size = UDim2.new(1, 0, 0, 34)
+	pickInfo.TextXAlignment = Enum.TextXAlignment.Left
+	local pickChips: { [string]: TextButton } = {}
+
 	local help = label(
 		menu,
 		"移動：WASD・左スティック\n打つ：クリック・スペース・R2・画面の「打つ」\nコース：マウスの左右・右スティック・移動の向き\nボールが自分のラケットに来た瞬間に打つと PERFECT",
@@ -353,9 +390,75 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		touchButton = t
 	end
 
+	-- ability slots (bottom centre) and the announcement line
+	local slotBar = Instance.new("Frame")
+	slotBar.Name = "AbilitySlots"
+	slotBar.BackgroundTransparency = 1
+	slotBar.AnchorPoint = Vector2.new(0.5, 1)
+	slotBar.Position = UDim2.new(0.5, 0, 1, -58)
+	slotBar.Size = UDim2.fromOffset(2 * 170 + 10, 56)
+	slotBar.Parent = match
+	local slots: { Slot } = {}
+	for i = 1, Abilities.SLOTS do
+		local b = Instance.new("TextButton")
+		b.Text = ""
+		b.AutoButtonColor = true
+		b.BackgroundColor3 = PANEL
+		b.BackgroundTransparency = 0.15
+		b.Position = UDim2.fromOffset((i - 1) * 180, 0)
+		b.Size = UDim2.fromOffset(170, 56)
+		b.Parent = slotBar
+		corner(b, 8)
+		local st = Instance.new("UIStroke")
+		st.Thickness = 1.5
+		st.Color = INK
+		st.Transparency = 0.6
+		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		st.Parent = b
+		local key = label(b, if i == 1 then "Q" else "E", 12, INK_DIM, FONT)
+		key.Position = UDim2.fromOffset(10, 6)
+		key.Size = UDim2.fromOffset(40, 14)
+		key.TextXAlignment = Enum.TextXAlignment.Left
+		local cost = label(b, "", 12, INK_DIM, FONT)
+		cost.AnchorPoint = Vector2.new(1, 0)
+		cost.Position = UDim2.new(1, -10, 0, 6)
+		cost.Size = UDim2.fromOffset(60, 14)
+		cost.TextXAlignment = Enum.TextXAlignment.Right
+		local name = label(b, "", 15, INK, FONT)
+		name.Position = UDim2.fromOffset(10, 24)
+		name.Size = UDim2.new(1, -20, 0, 22)
+		name.TextXAlignment = Enum.TextXAlignment.Left
+		name.TextScaled = true
+		b.Activated:Connect(function()
+			callbacks.onAbility(i)
+		end)
+		slots[i] = { frame = b, name = name, cost = cost, key = key, stroke = st }
+	end
+	if UserInputService.TouchEnabled then
+		-- move the slots above the swing button on phones
+		slotBar.AnchorPoint = Vector2.new(1, 1)
+		slotBar.Position = UDim2.new(1, -20, 1, -272)
+		slotBar.Size = UDim2.fromOffset(170, 2 * 56 + 8)
+		for i, s in slots do
+			s.frame.Position = UDim2.fromOffset(0, (i - 1) * 64)
+			s.key.Text = ""
+		end
+	end
+
+	local announce = label(match, "", 26, INK)
+	announce.AnchorPoint = Vector2.new(0.5, 0.5)
+	announce.Position = UDim2.fromScale(0.5, 0.24)
+	announce.Size = UDim2.fromOffset(600, 34)
+	announce.TextTransparency = 1
+	local announceStroke = Instance.new("UIStroke")
+	announceStroke.Thickness = 2
+	announceStroke.Color = Color3.new(0, 0, 0)
+	announceStroke.Transparency = 0.4
+	announceStroke.Parent = announce
+
 	gui.Parent = playerGui
 
-	return setmetatable({
+	local self = setmetatable({
 		gui = gui,
 		menu = menu,
 		match = match,
@@ -378,7 +481,117 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		resultTitle = resultTitle,
 		resultScore = resultScore,
 		touchButton = touchButton,
+		loadout = table.clone(Abilities.DefaultLoadout),
+		pickChips = pickChips,
+		pickInfo = pickInfo,
+		slots = slots,
+		slotIds = {},
+		announce = announce,
 	}, Hud)
+
+	for order, def in Abilities.List do
+		local chip = Instance.new("TextButton")
+		chip.LayoutOrder = order
+		chip.Text = `{def.name}  {def.cost}`
+		chip.TextSize = 13
+		chip.TextScaled = true
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MaxTextSize = 14
+		limit.Parent = chip
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 6)
+		pad.PaddingRight = UDim.new(0, 6)
+		pad.Parent = chip
+		chip.FontFace = FONT
+		chip.TextColor3 = INK
+		chip.BackgroundColor3 = Color3.fromRGB(16, 22, 40)
+		chip.Parent = grid
+		corner(chip, 6)
+		local st = Instance.new("UIStroke")
+		st.Color = abilityColor(def.id)
+		st.Transparency = 0.6
+		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		st.Parent = chip
+		chip.Activated:Connect(function()
+			self:togglePick(def.id)
+		end)
+		pickChips[def.id] = chip
+	end
+	self:refreshPicks(self.loadout[1])
+	return self
+end
+
+-- Picking a third ability drops the oldest pick.
+function Hud.togglePick(self: Hud, id: string)
+	local i = table.find(self.loadout, id)
+	if i then
+		if #self.loadout > 1 then
+			table.remove(self.loadout, i)
+		end
+	else
+		table.insert(self.loadout, id)
+		if #self.loadout > Abilities.SLOTS then
+			table.remove(self.loadout, 1)
+		end
+	end
+	self:refreshPicks(id)
+end
+
+function Hud.refreshPicks(self: Hud, focus: string?)
+	for id, chip in self.pickChips do
+		local on = table.find(self.loadout, id) ~= nil
+		local color = abilityColor(id)
+		chip.BackgroundColor3 = if on then color:Lerp(PANEL, 0.55) else Color3.fromRGB(16, 22, 40)
+		local st = chip:FindFirstChildOfClass("UIStroke")
+		if st then
+			st.Transparency = if on then 0 else 0.6
+		end
+	end
+	local def = focus and Abilities.get(focus)
+	if def then
+		self.pickInfo.Text = `{def.name}（{def.role}・ゲージ{def.cost}）：{def.effect}`
+	end
+end
+
+function Hud.getLoadout(self: Hud): { string }
+	return table.clone(self.loadout)
+end
+
+-- Shows the abilities brought into this match.
+function Hud.setSlots(self: Hud, loadout: { string })
+	for i, s in self.slots do
+		local id = loadout[i]
+		local def = id and Abilities.get(id)
+		s.frame.Visible = def ~= nil
+		self.slotIds[i] = id
+		if def then
+			s.name.Text = def.name
+			s.cost.Text = `ゲージ {def.cost}`
+			s.stroke.Color = abilityColor(def.id)
+		end
+	end
+end
+
+-- state per slot: "ready" | "armed" | "waiting" (not enough gauge / used / between points)
+function Hud.setSlotStates(self: Hud, states: { string })
+	for i, s in self.slots do
+		local state = states[i] or "waiting"
+		s.frame.BackgroundTransparency = if state == "waiting" then 0.55 else 0.15
+		s.name.TextTransparency = if state == "waiting" then 0.5 else 0
+		s.stroke.Thickness = if state == "armed" then 3 else 1.5
+		s.stroke.Transparency = if state == "waiting" then 0.7 elseif state == "armed" then 0 else 0.2
+		local def = self.slotIds[i] and Abilities.get(self.slotIds[i])
+		s.cost.Text = if state == "armed" then "次の返球で発動" elseif def then `ゲージ {def.cost}` else ""
+	end
+end
+
+-- A big coloured line telling both players which ability was just used.
+function Hud.announceAbility(self: Hud, text: string, color: Color3)
+	self.announce.Text = text
+	self.announce.TextColor3 = color
+	self.announce.TextTransparency = 0
+	local info = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.7)
+	TweenService:Create(self.announce, info, { TextTransparency = 1 }):Play()
 end
 
 function Hud.showMenu(self: Hud)
@@ -435,18 +648,19 @@ function Hud.setHint(self: Hud, text: string)
 	self.hint.Text = text
 end
 
-local GRADE_TEXT = { Perfect = "PERFECT!!", Good = "GOOD", Weak = "あまい…", Miss = "MISS" }
+local GRADE_TEXT =
+	{ Perfect = "PERFECT!!", Good = "GOOD", Weak = "あまい…", Miss = "MISS", Barrier = "バリア！" }
 
 -- Shows the timing grade. offset = seconds early (negative) or late (positive).
 function Hud.popupGrade(self: Hud, grade: string, offset: number?)
-	local color = Palette.Grade[grade] or INK
+	local color = if grade == "Barrier" then abilityColor("Barrier") else (Palette.Grade[grade] or INK)
 	self.popup.Text = GRADE_TEXT[grade] or grade
 	self.popup.TextColor3 = color
 	self.popup.TextTransparency = 0
 	self.popup.Size = UDim2.fromOffset(600, if grade == "Perfect" then 96 else 72)
 	self.popup.TextSize = if grade == "Perfect" then 72 else 54
 	local sub = ""
-	if offset and grade ~= "Perfect" then
+	if offset and grade ~= "Perfect" and grade ~= "Barrier" then
 		local ms = math.round(math.abs(offset) * 1000)
 		sub = if offset < 0 then `{ms}ms 早い` else `{ms}ms 遅い`
 	end

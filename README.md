@@ -5,7 +5,8 @@
 - 企画・仕様書：[卓球バトルゲーム 企画・仕様書](https://claude.ai/artifact/Wb7VtrggpjJEyZ8imLT5ab)
 - コンセプトアート（3D）：[SPIN RIFT Concept Art](https://claude.ai/artifact/DBQq2aiGqVfSjMVeBLv6Ac)
 - [フェーズ1 手触りの試作](docs/phase1.md)
-- いまのフェーズ：[フェーズ2 オンライン対戦](docs/phase2.md)
+- [フェーズ2 オンライン対戦](docs/phase2.md)
+- いまのフェーズ：[フェーズ3 特殊能力](docs/phase3.md)
 
 ## 開発環境のセットアップ
 
@@ -41,6 +42,7 @@ VS Code を使う場合は `.vscode/extensions.json` の推奨拡張（Rojo、lu
 | --- | --- |
 | placeファイルを書き出す | `rojo build -o SpinRift.rbxl` |
 | テスト（Lune） | `lune run tests/run` |
+| 能力のバランスを測る | `lune run tools/balance 80` |
 | 整形 | `stylua src tests` |
 | Lint | `selene src` |
 
@@ -64,7 +66,8 @@ Roblox の Instance を使わない純粋なロジックなので、サーバー
 | `Trajectory` | ボールの軌道。打った瞬間に「始点・バウンド位置・終点・高さ・飛ぶ時間」を決め、時刻から位置を計算する |
 | `Judge` | 打つタイミングの判定（PERFECT / GOOD / あまい / MISS）、届く範囲、送られてきた時刻と位置の補正 |
 | `Match` | 1試合の進行。サーブ、ラリー、得点、7点先取とデュース、3ゲーム中2ゲーム先取、リフトゲージ、途中退出 |
-| `Bot` | コンピューターの相手（壁打ち・やさしい・ふつう・つよい） |
+| `Bot` | コンピューターの相手（壁打ち・やさしい・ふつう・つよい）。能力も使う |
+| `Abilities` | 8種類の能力の定義（名前、ゲージ、効果）と調整用の数値 |
 
 ボールは Roblox の物理演算を使いません。サーバーが軌道を決めて全員に送り、各プレイヤーの画面は共通のサーバー時刻（`workspace:GetServerTimeNow()`）でその軌道を描きます。プレイヤーが送るのは「打った時刻と狙った方向」だけで、当たったかどうかはサーバーが判定します。
 

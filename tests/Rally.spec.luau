@@ -7,10 +7,11 @@ return function(loader, expect)
 
 	-- Small deterministic RNG (Lune has no Roblox `Random`).
 	local function rng(seed: number)
-		local state = seed
+		local state = (seed % 2147483646) + 1
 		return function(lo: number, hi: number): number
-			state = (state * 1103515245 + 12345) % 2147483648
-			return lo + (hi - lo) * state / 2147483648
+			-- Park-Miller: stays below 2^53, so the arithmetic is exact in doubles
+			state = (state * 16807) % 2147483647
+			return lo + (hi - lo) * state / 2147483647
 		end
 	end
 

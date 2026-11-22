@@ -42,6 +42,7 @@ local function moduleFile(path: string): string?
 end
 
 local cache: { [string]: any } = {}
+local extraGlobals: { [string]: any } = {}
 local nodes: { [string]: any } = {}
 local node
 
@@ -51,14 +52,11 @@ local function requireNode(n: any): any
 	assert(file, "not a module: " .. path)
 	if cache[file] == nil then
 		local isInit = string.match(file, "/init%.luau$") ~= nil
-		local fn = luau.load(sources[file], {
-			debugName = file,
-			environment = {
-				script = if isInit then node(dirname(file)) else n,
-				require = requireNode,
-				Vector3 = roblox.Vector3,
-			},
-		})
+		local env = table.clone(extraGlobals)
+		env.script = if isInit then node(dirname(file)) else n
+		env.require = requireNode
+		env.Vector3 = roblox.Vector3
+		local fn = luau.load(sources[file], { debugName = file, environment = env })
 		cache[file] = fn()
 	end
 	return cache[file]
@@ -74,6 +72,11 @@ function node(path: string): any
 			if key == "Parent" then
 				return node(dirname(own))
 			end
+			if key == "WaitForChild" or key == "FindFirstChild" then
+				return function(self2, name)
+					return self2[name]
+				end
+			end
 			local child = own .. "/" .. key
 			assert(moduleFile(child) or dirs[child], `{key} is not a child of {own}`)
 			return node(child)
@@ -84,6 +87,26 @@ function node(path: string): any
 end
 
 local loader = {}
+
+-- Extra globals (e.g. a fake `game`) for modules loaded from now on.
+function loader.setGlobals(globals: { [string]: any })
+	extraGlobals = globals
+end
+
+-- Runs a Script or LocalScript file (e.g. src/client/init.client.luau). Its `script` is its folder,
+-- as Rojo maps a folder with an init script to that script.
+function loader.runScript(file: string)
+	local env = table.clone(extraGlobals)
+	env.script = node(dirname(file))
+	env.require = requireNode
+	env.Vector3 = roblox.Vector3
+	luau.load(fs.readFile(file), { debugName = file, environment = env })()
+end
+
+-- The script node for a folder, as `script` or ReplicatedStorage.Shared would see it.
+function loader.node(path: string): any
+	return node(path)
+end
 
 -- loader.require("src/shared/RhythmEngine") -> the module's return value
 function loader.require(path: string): any

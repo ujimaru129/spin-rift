@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Rally"):WaitForChild("Config"))
+local Abilities = require(Shared:WaitForChild("Rally"):WaitForChild("Abilities"))
 local Net = require(Shared:WaitForChild("Net"))
 local Palette = require(Shared:WaitForChild("Palette"))
 local BallView = require(script.BallView)
@@ -20,6 +21,7 @@ local camera = workspace.CurrentCamera
 local requestRemote = Net.get(Net.REQUEST_MATCH)
 local leaveRemote = Net.get(Net.LEAVE_MATCH)
 local swingRemote = Net.get(Net.SWING)
+local abilityRemote = Net.get(Net.USE_ABILITY)
 local matchEvent = Net.get(Net.MATCH_EVENT)
 
 local ball = BallView.new()
@@ -31,6 +33,14 @@ local stickAim = 0
 local shake = 0
 local cameraZ = 0
 local lastSwingSent = 0
+
+-- what the ability buttons need to know
+local myLoadout: { string } = {}
+local myGauge = 0
+local usedThisRally = false
+local armedId: string? = nil
+local inRally = false
+local barrierWalls: { [number]: Part } = {}
 
 local function now(): number
 	return workspace:GetServerTimeNow()
@@ -82,18 +92,37 @@ local function swing()
 	swingRemote:FireServer(t, math.clamp(currentAim(), -1, 1), z)
 end
 
-local hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
+-- Direction for Blink: where the player is walking, or where they aim if standing still.
+local function blinkDirection(): number
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local z = if humanoid then humanoid.MoveDirection.Z else 0
+	if math.abs(z) < 0.2 then
+		z = currentAim()
+	end
+	return z
+end
+
+local function useAbility(slot: number)
+	if origin and myLoadout[slot] then
+		abilityRemote:FireServer(slot, blinkDirection())
+	end
+end
+
+local hud
+hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 	onMode = function(mode: string)
 		currentMode = mode
-		requestRemote:FireServer(mode)
+		requestRemote:FireServer(mode, hud:getLoadout())
 	end,
 	onLeave = function()
 		leaveRemote:FireServer()
 	end,
 	onRetry = function()
-		requestRemote:FireServer(currentMode)
+		requestRemote:FireServer(currentMode, hud:getLoadout())
 	end,
 	onSwingButton = swing,
+	onAbility = useAbility,
 })
 hud:showMenu()
 
@@ -102,12 +131,13 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	local t = input.UserInputType
-	if
-		t == Enum.UserInputType.MouseButton1
-		or input.KeyCode == Enum.KeyCode.Space
-		or input.KeyCode == Enum.KeyCode.ButtonR2
-	then
+	local key = input.KeyCode
+	if t == Enum.UserInputType.MouseButton1 or key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonR2 then
 		swing()
+	elseif key == Enum.KeyCode.Q or key == Enum.KeyCode.ButtonL1 then
+		useAbility(1)
+	elseif key == Enum.KeyCode.E or key == Enum.KeyCode.ButtonL2 then
+		useAbility(2)
 	end
 end)
 UserInputService.InputChanged:Connect(function(input)
@@ -145,6 +175,94 @@ end
 
 local REASON = { miss = "取れなかった", whiff = "空振り", reach = "届かなかった" }
 
+local DENIED = {
+	gauge = "ゲージが足りない",
+	used = "このラリーではもう能力を使った",
+	notRally = "ラリー中に使える",
+	noBall = "自分に向かってくる球があるときに使える",
+	active = "もう発動している",
+}
+
+local function refreshSlots()
+	local states = {}
+	for i, id in myLoadout do
+		local def = Abilities.get(id)
+		if armedId == id then
+			states[i] = "armed"
+		elseif def and inRally and not usedThisRally and myGauge >= def.cost then
+			states[i] = "ready"
+		else
+			states[i] = "waiting"
+		end
+	end
+	hud:setSlotStates(states)
+end
+
+local function clearBarrier(index: number)
+	local wall = barrierWalls[index]
+	if wall then
+		wall:Destroy()
+		barrierWalls[index] = nil
+	end
+end
+
+local function abilityName(id: string): string
+	local def = Abilities.get(id)
+	return if def then def.name else id
+end
+
+local function onAbilityEvent(e: { [string]: any })
+	local mine = e.player == me
+	local color = Hud.abilityColor(e.id)
+	local who = if mine then "" else "相手："
+	if e.state == "armed" then
+		if mine then
+			armedId = e.id
+			hud:setHint(`{abilityName(e.id)}：次の返球で発動`)
+		end
+	elseif e.state == "disarmed" then
+		if mine then
+			armedId = nil
+			hud:setHint("")
+		end
+	elseif e.state == "fizzled" then
+		if mine then
+			armedId = nil
+			hud:setHint("ゲージが足りず、能力は発動しなかった")
+		end
+	elseif e.state == "fired" or e.state == "used" then
+		hud:announceAbility(`{who}{abilityName(e.id)}！`, color)
+		if mine then
+			armedId = nil
+			usedThisRally = true
+			myGauge = e.gauge or myGauge
+			hud:setGauge(myGauge)
+			hud:setHint("")
+		end
+		local o = origin
+		if e.state == "used" and o then
+			local side = if e.player == 1 then -1 else 1
+			if e.id == "Barrier" then
+				clearBarrier(e.player)
+				barrierWalls[e.player] = ball:barrierWall(side, color)
+			elseif e.id == "GravityWell" then
+				local targetSide = if e.target == 1 then -1 else 1
+				ball:floorRing(targetSide, color, math.max(e.untilTime - now(), 0.5))
+			elseif e.id == "Blink" then
+				local root = if mine then myRoot() else nil
+				local at = if root then root.Position else o + Vector3.new(side * 14, 0.2, 0)
+				ball:flashAt(Vector3.new(at.X, o.Y + 0.2, at.Z), color)
+			end
+		end
+	elseif e.state == "triggered" then
+		hud:announceAbility(`{who}リフトバリア発動！`, color)
+		clearBarrier(e.player)
+	elseif e.state == "expired" then
+		clearBarrier(e.player)
+	end
+	refreshSlots()
+end
+
 local function endMatchView()
 	origin = nil
 	ball:hide()
@@ -162,25 +280,60 @@ local function onEvent(e: { [string]: any })
 		mySide = e.side
 		origin = e.origin
 		cameraZ = 0
+		myLoadout = e.loadout or {}
+		myGauge, usedThisRally, armedId, inRally = 0, false, nil, false
+		clearBarrier(1)
+		clearBarrier(2)
 		ball:setOrigin(e.origin)
 		ball:hide()
 		hud:showMatch(e.opponent)
+		hud:setSlots(myLoadout)
+		refreshSlots()
+		local theirs = e.opponentLoadout or {}
+		if #theirs > 0 then
+			local names = {}
+			for _, id in theirs do
+				table.insert(names, abilityName(id))
+			end
+			hud:announceAbility("相手の能力：" .. table.concat(names, "・"), Palette.TeamB)
+		end
 		camera.CameraType = Enum.CameraType.Scriptable
 		camera.FieldOfView = 52
 		setJump(false)
 	elseif kind == "Score" then
 		hud:setScore(e, me)
+		myGauge = e.gauge[me]
+		refreshSlots()
 	elseif kind == "ServeWait" then
 		serveHint(e.server)
 	elseif kind == "Shot" then
-		ball:setShot(e.shot, now())
-		hud:setHint("")
+		if e.update then
+			ball:updateShot(e.shot)
+		else
+			ball:setShot(e.shot, now())
+			if not armedId then
+				hud:setHint("")
+			end
+		end
+		inRally = true
+		refreshSlots()
+	elseif kind == "Ability" then
+		onAbilityEvent(e)
+	elseif kind == "AbilityDenied" then
+		if e.player == me then
+			hud:setHint(DENIED[e.reason] or "今は使えない")
+		end
 	elseif kind == "Swing" then
 		if e.player == me then
 			hud:popupGrade(e.grade, e.offset)
+			if e.protected then
+				hud:setHint("バリアが守ってくれる！")
+			end
 			if e.grade ~= "Miss" then
 				ball:hitEffect(e.grade)
+				myGauge = e.gauge
 				hud:setGauge(e.gauge)
+				refreshSlots()
 				if e.grade == "Perfect" then
 					shake = 0.35
 					flashFov(6)
@@ -194,6 +347,10 @@ local function onEvent(e: { [string]: any })
 		end
 	elseif kind == "Point" then
 		ball:lose(now())
+		inRally, usedThisRally, armedId = false, false, nil
+		clearBarrier(1)
+		clearBarrier(2)
+		refreshSlots()
 		local mine = e.winner == me
 		hud:popupText(
 			if mine then "POINT!" else (REASON[e.reason] or "失点"),
@@ -210,6 +367,8 @@ local function onEvent(e: { [string]: any })
 		ball:hide()
 		hud:showResult(e.winner == me, e.games[me], e.games[them()], note)
 	elseif kind == "Left" then
+		clearBarrier(1)
+		clearBarrier(2)
 		endMatchView()
 		hud:showMenu()
 	end

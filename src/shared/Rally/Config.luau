@@ -32,6 +32,9 @@ Config.Timing = {
 	weak = 0.24,
 }
 
+-- A weak ball (あまい) is easy to read, so the receiver's timing windows are this much wider.
+Config.WeakBallWindow = 1.4
+
 -- Swings earlier than this before the ball arrives are ignored rather than counted as a whiff,
 -- so pressing the button too early is not punished harshly while the ball is still far away.
 Config.IgnoreEarlierThan = 0.45

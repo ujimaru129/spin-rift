@@ -15,6 +15,7 @@ local Config = require(RallyFolder:WaitForChild("Config"))
 local Judge = require(RallyFolder:WaitForChild("Judge"))
 local Match = require(RallyFolder:WaitForChild("Match"))
 local Bot = require(RallyFolder:WaitForChild("Bot"))
+local Abilities = require(RallyFolder:WaitForChild("Abilities"))
 local Net = require(Shared:WaitForChild("Net"))
 local Palette = require(Shared:WaitForChild("Palette"))
 local Arena = require(script.Parent.Arena)
@@ -23,6 +24,8 @@ local ONLINE = "Online"
 local ARENA_SPACING = 400 -- studs between arenas
 local AUTO_SERVE_AFTER = 5 -- seconds a player may wait before their serve goes in automatically
 local MIN_SWING_GAP = 0.15 -- ignore button mashing faster than this
+local WALK_SPEED = 16
+local ZONE_HALF_Z = 8 -- how far across the table a Blink may take a player
 
 type Seat = {
 	index: number, -- 1 or 2; player 1 stands on side -1
@@ -31,6 +34,7 @@ type Seat = {
 	model: Model?, -- the bot's avatar
 	lastSwing: number,
 	left: boolean,
+	loadout: { string },
 }
 
 type Session = {
@@ -47,6 +51,7 @@ local MatchService = {}
 local sessions: { [Session]: boolean } = {}
 local byPlayer: { [Player]: Session } = {}
 local queue: { Player } = {}
+local queuedLoadouts: { [Player]: { string } } = {}
 local usedSlots: { [number]: boolean } = {}
 local matchEvent: RemoteEvent
 
@@ -108,9 +113,53 @@ local function send(session: Session, event: Match.Event)
 	end
 end
 
+local function humanoidOf(player: Player?): Humanoid?
+	local character = player and player.Character
+	return if character then character:FindFirstChildOfClass("Humanoid") else nil
+end
+
+-- Abilities that act on the world outside the match rules: movement.
+local function applyAbility(session: Session, e: Match.Event)
+	if e.state ~= "used" then
+		return
+	end
+	if e.id == "GravityWell" then
+		local target = session.seats[e.target]
+		if target.bot then
+			target.bot:slow(e.untilTime, e.factor)
+		else
+			local humanoid = humanoidOf(target.player)
+			if humanoid then
+				humanoid.WalkSpeed = WALK_SPEED * e.factor
+				task.delay(e.untilTime - now(), function()
+					if humanoid.Parent and now() >= session.match.slowedUntil[e.target] then
+						humanoid.WalkSpeed = WALK_SPEED
+					end
+				end)
+			end
+		end
+	elseif e.id == "Blink" then
+		local seat = session.seats[e.player]
+		if seat.bot then
+			seat.bot:blink(e.dirZ, e.distance)
+		else
+			local character = seat.player and seat.player.Character
+			local root = seat.player and rootPart(seat.player)
+			if character and root then
+				local z = root.Position.Z - session.origin.Z
+				local target = math.clamp(z + e.dirZ * e.distance, -ZONE_HALF_Z, ZONE_HALF_Z)
+				character:PivotTo(character:GetPivot() + Vector3.new(0, 0, target - z))
+			end
+		end
+	end
+end
+
 local function dispatch(session: Session, events: { Match.Event })
 	local pointEnded = false
 	for _, e in events do
+		if e.kind == "Ability" then
+			applyAbility(session, e)
+		end
 		for _, seat in session.seats do
 			if seat.bot then
 				if e.kind == "Shot" then
@@ -169,7 +218,7 @@ local function begin(mode: string, seats: { Seat }, firstServer: number)
 		slot = slot,
 		origin = origin,
 		arena = Arena.build(origin, slot),
-		match = Match.new(now(), firstServer),
+		match = Match.new(now(), firstServer, { seats[1].loadout, seats[2].loadout }),
 		seats = seats,
 	}
 	sessions[session] = true
@@ -191,6 +240,8 @@ local function begin(mode: string, seats: { Seat }, firstServer: number)
 				side = Match.sideOf(seat.index),
 				opponent = seatName(other, mode),
 				origin = origin,
+				loadout = seat.loadout,
+				opponentLoadout = other.loadout,
 			})
 		end
 	end
@@ -198,16 +249,34 @@ local function begin(mode: string, seats: { Seat }, firstServer: number)
 	send(session, { kind = "ServeWait", server = session.match.server, at = session.match.nextServeAt })
 end
 
-local function humanSeat(index: number, player: Player): Seat
-	return { index = index, player = player, lastSwing = 0, left = false }
+local function humanSeat(index: number, player: Player, loadout: { string }): Seat
+	return { index = index, player = player, lastSwing = 0, left = false, loadout = loadout }
 end
 
-local function startPractice(player: Player, mode: string)
+-- Two different abilities for a practice Bot. The wall brings none.
+local function botLoadout(mode: string, rng: Random): { string }
+	if mode == "Wall" then
+		return {}
+	end
+	local ids = {}
+	for _, def in Abilities.List do
+		table.insert(ids, def.id)
+	end
+	local a = table.remove(ids, rng:NextInteger(1, #ids)) :: string
+	local b = table.remove(ids, rng:NextInteger(1, #ids)) :: string
+	return { a, b }
+end
+
+local function startPractice(player: Player, mode: string, loadout: { string })
 	local rng = Random.new()
+	local bl = botLoadout(mode, rng)
 	local bot = Bot.new(mode, Match.sideOf(2), function(a, b)
 		return rng:NextNumber(a, b)
-	end)
-	local seats = { humanSeat(1, player), { index = 2, bot = bot, lastSwing = 0, left = false } :: Seat }
+	end, bl)
+	local seats = {
+		humanSeat(1, player, loadout),
+		{ index = 2, bot = bot, lastSwing = 0, left = false, loadout = bl } :: Seat,
+	}
 	-- the player serves first against the wall, the Bot serves first in a match
 	begin(mode, seats, if mode == "Wall" then 1 else 2)
 end
@@ -217,19 +286,26 @@ local function removeFromQueue(player: Player)
 	if i then
 		table.remove(queue, i)
 	end
+	queuedLoadouts[player] = nil
 end
 
 local function tryPair()
 	while #queue >= 2 do
 		local a = table.remove(queue, 1) :: Player
 		local b = table.remove(queue, 1) :: Player
-		begin(ONLINE, { humanSeat(1, a), humanSeat(2, b) }, math.random(1, 2))
+		local la, lb = queuedLoadouts[a], queuedLoadouts[b]
+		queuedLoadouts[a], queuedLoadouts[b] = nil, nil
+		begin(ONLINE, { humanSeat(1, a, la), humanSeat(2, b, lb) }, math.random(1, 2))
 	end
 end
 
 -- Takes a player out of whatever they are in. In an unfinished online match the other player wins.
 local function leave(player: Player)
 	removeFromQueue(player)
+	local humanoid = humanoidOf(player)
+	if humanoid then
+		humanoid.WalkSpeed = WALK_SPEED
+	end
 	local session = byPlayer[player]
 	if not session then
 		return
@@ -252,7 +328,7 @@ local function leave(player: Player)
 	end
 end
 
-local function request(player: Player, mode: unknown)
+local function request(player: Player, mode: unknown, loadout: unknown)
 	if type(mode) ~= "string" then
 		return
 	end
@@ -260,12 +336,14 @@ local function request(player: Player, mode: unknown)
 		return
 	end
 	leave(player)
+	local chosen = Abilities.sanitize(loadout)
 	if mode == ONLINE then
 		table.insert(queue, player)
+		queuedLoadouts[player] = chosen
 		fire(player, { kind = "Queued" })
 		tryPair()
 	else
-		startPractice(player, mode)
+		startPractice(player, mode, chosen)
 	end
 end
 
@@ -316,6 +394,29 @@ local function onSwing(player: Player, reported: unknown, aim: unknown, myZ: unk
 	end)
 end
 
+local function seatOf(session: Session, player: Player): Seat?
+	for _, s in session.seats do
+		if s.player == player then
+			return s
+		end
+	end
+	return nil
+end
+
+local function onAbility(player: Player, slot: unknown, dirZ: unknown)
+	if slot ~= 1 and slot ~= 2 then
+		return
+	end
+	local d: number? = if type(dirZ) == "number" and dirZ == dirZ then dirZ else nil
+	later(function()
+		local session = byPlayer[player]
+		local seat = session and seatOf(session, player)
+		if session and seat then
+			dispatch(session, session.match:useAbility(seat.index, slot :: number, now(), d))
+		end
+	end)
+end
+
 local function step(dt: number)
 	local t = now()
 	for session in sessions do
@@ -336,6 +437,22 @@ local function step(dt: number)
 				if swingAt then
 					for _, e in m:swing(seat.index, swingAt, bot.aimZ, bot.z) do
 						table.insert(events, e)
+					end
+				end
+				if m.phase == "Rally" then
+					local slot, dir = bot:think({
+						now = t,
+						gauge = m.gauge[seat.index],
+						used = m.usedThisRally[seat.index],
+						armed = m.armed[seat.index],
+						barrier = m.barrier[seat.index],
+						receiving = m.receiver == seat.index,
+						shot = m.shot,
+					})
+					if slot then
+						for _, e in m:useAbility(seat.index, slot, t, dir) do
+							table.insert(events, e)
+						end
 					end
 				end
 				-- line the avatar's paddle up with where the bot stands
@@ -367,6 +484,7 @@ function MatchService.start()
 		end
 	end)
 	Net.get(Net.SWING).OnServerEvent:Connect(onSwing)
+	Net.get(Net.USE_ABILITY).OnServerEvent:Connect(onAbility)
 	Players.PlayerRemoving:Connect(leave)
 	local function watch(player: Player)
 		player.CharacterAdded:Connect(function()

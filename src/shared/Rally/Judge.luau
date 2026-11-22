@@ -8,13 +8,15 @@ local Judge = {}
 export type Grade = "Perfect" | "Good" | "Weak" | "Miss"
 
 -- offset = swing time - arrival time, in seconds (negative = early).
-function Judge.grade(offset: number): Grade
+-- scale shrinks the windows (Lightning Smash halves them).
+function Judge.grade(offset: number, scale: number?): Grade
 	local a = math.abs(offset)
-	if a <= Config.Timing.perfect then
+	local k = scale or 1
+	if a <= Config.Timing.perfect * k then
 		return "Perfect"
-	elseif a <= Config.Timing.good then
+	elseif a <= Config.Timing.good * k then
 		return "Good"
-	elseif a <= Config.Timing.weak then
+	elseif a <= Config.Timing.weak * k then
 		return "Weak"
 	end
 	return "Miss"

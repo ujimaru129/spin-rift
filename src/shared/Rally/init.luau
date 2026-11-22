@@ -7,4 +7,5 @@ return {
 	Judge = require(script.Judge),
 	Match = require(script.Match),
 	Bot = require(script.Bot),
+	Abilities = require(script.Abilities),
 }
