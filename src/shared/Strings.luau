@@ -1275,27 +1275,27 @@ local ABILITY: { [string]: { [string]: AbilityText } } = {
 		en = {
 			name = "Meteor Drop",
 			role = "Attack",
-			effect = "Your next return flies high and drops steeply; the timing window shrinks to 85%",
+			effect = "Your next return flies high and drops steeply; the timing window shrinks to 90%",
 		},
 		es = {
 			name = "Caída meteoro",
 			role = "Ataque",
-			effect = "Tu próxima devolución sube alto y cae en picada; la ventana de tiempo baja al 85%",
+			effect = "Tu próxima devolución sube alto y cae en picada; la ventana de tiempo baja al 90%",
 		},
 		pt = {
 			name = "Queda meteoro",
 			role = "Ataque",
-			effect = "Sua próxima rebatida sobe alto e cai em queda íngreme; a janela de tempo cai para 85%",
+			effect = "Sua próxima rebatida sobe alto e cai em queda íngreme; a janela de tempo cai para 90%",
 		},
 		ko = {
 			name = "메테오 드롭",
 			role = "공격",
-			effect = "다음 리턴이 높이 솟았다가 가파르게 떨어진다. 타이밍 폭이 85%가 된다",
+			effect = "다음 리턴이 높이 솟았다가 가파르게 떨어진다. 타이밍 폭이 90%가 된다",
 		},
 		id = {
 			name = "Jatuhan Meteor",
 			role = "Serang",
-			effect = "Pukulan berikutnya melambung tinggi dan jatuh curam; jendela waktu jadi 85%",
+			effect = "Pukulan berikutnya melambung tinggi dan jatuh curam; jendela waktu jadi 90%",
 		},
 	},
 	EMP = {
