@@ -8,7 +8,8 @@
 - [フェーズ2 オンライン対戦](docs/phase2.md)
 - [フェーズ3 特殊能力](docs/phase3.md)
 - [フェーズ4 ランク戦とマッチング](docs/phase4.md)
-- いまのフェーズ：[フェーズ5 クローズドテスト](docs/phase5.md)
+- [フェーズ5 クローズドテスト](docs/phase5.md)
+- いまのフェーズ：[フェーズ6 世界同時公開](docs/phase6.md)（公開前のチェックリスト、6言語のストア説明文、新シーズンの出し方）
 
 ## 開発環境のセットアップ
 
@@ -53,9 +54,9 @@ VS Code を使う場合は `.vscode/extensions.json` の推奨拡張（Rojo、lu
 
 | フォルダ | Roblox上の場所 | 内容 |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | サーバー・クライアント共通。`Rally` が試合のルール、`Rank` がレートとマッチングのルール、`Strings` が画面の文言（日本語・英語） |
-| `src/server` | `ServerScriptService.Server` | 試合の進行（`MatchService`）、アリーナ（`Arena`）、ランク戦（`RankedQueue`・`RankedRoom`・`RankedResult`）、成績の保存（`PlayerData`）、ランキング（`Leaderboard`） |
-| `src/client` | `StarterPlayer.StarterPlayerScripts.Client` | 操作、カメラ、ボールの描画（`BallView`）、画面のUI（`Hud`） |
+| `src/shared` | `ReplicatedStorage.Shared` | サーバー・クライアント共通。`Rally` が試合のルール、`Rank` がレートとマッチングのルール、`Strings` が画面の文言（6言語）、`Season` がアリーナ・見た目アイテム・バトルパス |
+| `src/server` | `ServerScriptService.Server` | 試合の進行（`MatchService`）、アリーナ（`Arena`）、ランク戦（`RankedQueue`・`RankedRoom`・`RankedResult`）、成績の保存（`PlayerData`）、ランキング（`Leaderboard`）、バトルパスとアイテム（`Progression`）、感想（`Feedback`）、分析（`Analytics`）、テスター限定（`ClosedTest`） |
+| `src/client` | `StarterPlayer.StarterPlayerScripts.Client` | 操作、カメラ、ボールの描画（`BallView`）、画面のUI（`Hud`）、アリーナごとの光（`ArenaLook`） |
 
 ファイル名の規則（Rojo）: `*.server.luau` = Script、`*.client.luau` = LocalScript、`*.luau` = ModuleScript。
 

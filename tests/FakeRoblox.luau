@@ -393,6 +393,13 @@ function Fake.globals(sharedNode: any)
 				return player.Country or "JP"
 			end,
 		},
+		MarketplaceService = {
+			PromptGamePassPurchaseFinished = Fake.signal(),
+			UserOwnsGamePassAsync = function()
+				return false
+			end,
+			PromptGamePassPurchase = function() end,
+		},
 		AnalyticsService = {
 			LogOnboardingFunnelStepEvent = function() end,
 			LogCustomEvent = function() end,
@@ -437,6 +444,7 @@ function Fake.globals(sharedNode: any)
 		Enum = roblox.Enum,
 		Font = roblox.Font,
 		NumberSequence = roblox.NumberSequence,
+		NumberRange = roblox.NumberRange,
 		ColorSequence = roblox.ColorSequence,
 		TweenInfo = {
 			new = function(...)

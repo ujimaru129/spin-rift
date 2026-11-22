@@ -21,6 +21,7 @@ export type Effects = {
 	slowStart: number?, -- server time the Time Slow window starts
 	slowEnd: number?,
 	slowFactor: number?,
+	wind: number?, -- Sakura Float: sideways drift in studs, already included in `to`
 }
 
 export type Shot = {
@@ -51,7 +52,13 @@ end
 
 local function curveOffset(shot: Shot, s: number): number
 	local c = shot.effects.curve
-	return if c then c * math.sin(math.pi * s) else 0
+	local w = shot.effects.wind
+	local z = if c then c * math.sin(math.pi * s) else 0
+	if w then
+		-- the ball leaves aimed where the player pointed and drifts more and more with the wind
+		z -= w * s * (1 - s)
+	end
+	return z
 end
 
 -- Builds a shot from the hitter's contact point toward the opponent.
@@ -63,19 +70,20 @@ function Trajectory.plan(
 	aimZ: number,
 	kind: string,
 	startTime: number,
-	ability: string?
+	ability: string?,
+	wind: number?
 ): Shot
 	local style = (Config.Shots :: any)[kind] :: Config.ShotStyle
 	assert(style, "unknown shot kind: " .. tostring(kind))
 	local dir = -hitterSide -- the ball travels toward the other side
 	local limit = Config.Table.halfWidth - Config.AimMargin
-	local toZ = math.clamp(aimZ, -limit, limit)
+	local toZ = math.clamp(aimZ + (wind or 0), -limit, limit)
 	local fraction = Config.BounceFraction
 	local bounceX = dir * Config.Table.halfLength * style.depth
 	local bounceZ = math.clamp(lerp(from.Z, toZ, fraction), -limit, limit)
 
 	local duration, arc1, arc2 = style.duration, style.arc1, style.arc2
-	local effects: Effects = { ability = ability }
+	local effects: Effects = { ability = ability, wind = if wind and wind ~= 0 then wind else nil }
 	if ability == "Smash" then
 		local t = Abilities.Tuning.Smash
 		duration /= t.speed

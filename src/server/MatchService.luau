@@ -28,6 +28,10 @@ local RankedQueue = require(script.Parent.RankedQueue)
 local RankedResult = require(script.Parent.RankedResult)
 local RankedRoom = require(script.Parent.RankedRoom)
 local Analytics = require(script.Parent.Analytics)
+local Progression = require(script.Parent.Progression)
+local SeasonFolder = Shared:WaitForChild("Season")
+local Arenas = require(SeasonFolder:WaitForChild("Arenas"))
+local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
 local Feedback = require(script.Parent.Feedback)
 
 local ONLINE = "Online" -- casual match with someone in this server
@@ -67,6 +71,7 @@ local sessions: { [Session]: boolean } = {}
 local byPlayer: { [Player]: Session } = {}
 local queue: { Player } = {}
 local queuedLoadouts: { [Player]: { string } } = {}
+local queuedArenas: { [Player]: string } = {}
 local usedSlots: { [number]: boolean } = {}
 local matchEvent: RemoteEvent
 
@@ -223,6 +228,7 @@ local function logMatchOver(session: Session, e: Match.Event)
 		local p = seat.player
 		if p and not seat.left then
 			Analytics.event(p, "MatchFinished", 1, { session.mode, if e.winner == seat.index then "win" else "loss" })
+			task.spawn(Progression.awardMatch, p, session.mode, e.winner == seat.index)
 			Analytics.funnel(p, "FirstMatchFinished")
 			if session.mode == RANKED then
 				Analytics.funnel(p, "FirstRankedFinished")
@@ -278,7 +284,14 @@ local function placeCharacter(session: Session, seat: Seat)
 	if character then
 		local side = Match.sideOf(seat.index)
 		character:PivotTo(Arena.playerSpawn(session.origin, side))
-		Arena.attachPaddle(character, if side == -1 then Palette.TeamA else Palette.TeamB)
+		local data = PlayerData.get((seat.player :: Player).UserId)
+		local item = Cosmetics.get(data.equipped.paddle)
+		if item and item.rgb then
+			local material = (Enum.Material :: any)[item.material or "Neon"] or Enum.Material.Neon
+			Arena.attachPaddle(character, Color3.fromRGB(item.rgb[1], item.rgb[2], item.rgb[3]), material)
+		else
+			Arena.attachPaddle(character, if side == -1 then Palette.TeamA else Palette.TeamB)
+		end
 	end
 end
 
@@ -300,20 +313,37 @@ local function seatName(seat: Seat): string
 	return if seat.player then seat.player.DisplayName else ""
 end
 
+-- The cosmetics a seat shows in a match (false for a bot).
+local function seatLook(seat: Seat): any
+	if not seat.player then
+		return false
+	end
+	return table.clone(PlayerData.get(seat.player.UserId).equipped)
+end
+
 local function begin(
 	mode: string,
 	seats: { Seat },
 	firstServer: number,
-	onOver: ((winner: number, reason: string?) -> ())?
+	onOver: ((winner: number, reason: string?) -> ())?,
+	arenaId: string?
 )
 	local slot = freeSlot()
 	local origin = Vector3.new(slot * ARENA_SPACING, 200, 0)
+	local arenaDef = Arenas.get(arenaId or Arenas.DEFAULT) or Arenas.List[1]
+	-- gimmicks are for casual play only; ranked is always fair
+	local windy = arenaDef.wind and mode ~= RANKED and mode ~= TUTORIAL
 	local session: Session = {
 		mode = mode,
 		slot = slot,
 		origin = origin,
-		arena = Arena.build(origin, slot),
-		match = Match.new(now(), firstServer, { seats[1].loadout, seats[2].loadout }),
+		arena = Arena.build(origin, slot, arenaDef.id),
+		match = Match.new(
+			now(),
+			firstServer,
+			{ seats[1].loadout, seats[2].loadout },
+			{ windAt = if windy then Arenas.windAt else nil }
+		),
 		seats = seats,
 		onOver = onOver,
 	}
@@ -341,6 +371,9 @@ local function begin(
 				loadout = seat.loadout,
 				opponentLoadout = other.loadout,
 				ranked = mode == RANKED,
+				arena = arenaDef.id,
+				wind = windy,
+				looks = { seatLook(seats[1]), seatLook(seats[2]) },
 			})
 		end
 	end
@@ -366,7 +399,7 @@ local function botLoadout(mode: string, rng: Random): { string }
 	return { a, b }
 end
 
-local function startPractice(player: Player, mode: string, loadout: { string })
+local function startPractice(player: Player, mode: string, loadout: { string }, arena: string?)
 	local tutorial = mode == TUTORIAL
 	local botMode = if tutorial then "Wall" else mode
 	local rng = Random.new()
@@ -379,7 +412,7 @@ local function startPractice(player: Player, mode: string, loadout: { string })
 		{ index = 2, bot = bot, lastSwing = 0, left = false, loadout = bl } :: Seat,
 	}
 	-- the player serves first against the wall, the Bot serves first in a match
-	begin(mode, seats, if botMode == "Wall" then 1 else 2)
+	begin(mode, seats, if botMode == "Wall" then 1 else 2, nil, if tutorial then Arenas.DEFAULT else arena)
 	local session = byPlayer[player]
 	if tutorial and session then
 		session.tutorial = { step = "hit", returns = 0 }
@@ -401,8 +434,10 @@ local function tryPair()
 		local a = table.remove(queue, 1) :: Player
 		local b = table.remove(queue, 1) :: Player
 		local la, lb = queuedLoadouts[a], queuedLoadouts[b]
+		local arena = queuedArenas[a]
 		queuedLoadouts[a], queuedLoadouts[b] = nil, nil
-		begin(ONLINE, { humanSeat(1, a, la), humanSeat(2, b, lb) }, math.random(1, 2))
+		queuedArenas[a], queuedArenas[b] = nil, nil
+		begin(ONLINE, { humanSeat(1, a, la), humanSeat(2, b, lb) }, math.random(1, 2), nil, arena)
 	end
 end
 
@@ -413,10 +448,13 @@ function MatchService.startRanked(players: { Player }, loadouts: { { string } },
 		RankedQueue.leave(p)
 		removeFromQueue(p)
 	end
+	-- an arena both players have unlocked (looks only: no gimmicks in ranked)
+	local choices = Arenas.shared(PlayerData.get(players[1].UserId).best, PlayerData.get(players[2].UserId).best)
+	local arena = choices[math.random(1, math.max(#choices, 1))]
 	begin(RANKED, {
 		humanSeat(1, players[1], Abilities.sanitize(loadouts[1])),
 		humanSeat(2, players[2], Abilities.sanitize(loadouts[2])),
-	}, math.random(1, 2), onOver)
+	}, math.random(1, 2), onOver, arena)
 end
 
 local function sendProfile(player: Player)
@@ -436,6 +474,9 @@ local function sendProfile(player: Player)
 		regionName = Regions.Names[region],
 		placement = math.max(0, Rating.PLACEMENT_GAMES - data.games),
 		tutorialDone = data.tutorialDone,
+		best = data.best,
+		arena = data.arena,
+		pass = Progression.state(data),
 	})
 end
 
@@ -486,7 +527,17 @@ local function leave(player: Player)
 	end
 end
 
-local function request(player: Player, mode: unknown, loadout: unknown)
+-- The arena a player asked for, if they have unlocked it; remembered for next time.
+local function chooseArena(player: Player, requested: unknown): string
+	local data = PlayerData.get(player.UserId)
+	if type(requested) == "string" and Arenas.unlocked(requested, data.best) then
+		data.arena = requested
+		return requested
+	end
+	return if Arenas.unlocked(data.arena, data.best) then data.arena else Arenas.DEFAULT
+end
+
+local function request(player: Player, mode: unknown, loadout: unknown, arenaRequest: unknown)
 	if type(mode) ~= "string" then
 		return
 	end
@@ -495,6 +546,7 @@ local function request(player: Player, mode: unknown, loadout: unknown)
 	end
 	leave(player)
 	local chosen = Abilities.sanitize(loadout)
+	local arena = chooseArena(player, arenaRequest)
 	if mode == RANKED then
 		if RankedRoom.isRoom() then
 			return
@@ -509,10 +561,11 @@ local function request(player: Player, mode: unknown, loadout: unknown)
 	elseif mode == ONLINE then
 		table.insert(queue, player)
 		queuedLoadouts[player] = chosen
+		queuedArenas[player] = arena
 		fire(player, { kind = "Queued" })
 		tryPair()
 	else
-		startPractice(player, mode, chosen)
+		startPractice(player, mode, chosen, arena)
 	end
 end
 
@@ -667,6 +720,12 @@ function MatchService.start()
 			end
 		end)
 	end)
+	Net.get(Net.EQUIP).OnServerEvent:Connect(function(player, kind, id)
+		task.spawn(Progression.equip, player, kind, id)
+	end)
+	Net.get(Net.BUY_PREMIUM).OnServerEvent:Connect(function(player)
+		task.spawn(Progression.buyPremium, player)
+	end)
 	Net.get(Net.SEND_FEEDBACK).OnServerEvent:Connect(function(player, category, text, locale)
 		task.spawn(function()
 			fire(player, { kind = "FeedbackResult", status = Feedback.submit(player, category, text, locale) })
@@ -687,6 +746,7 @@ function MatchService.start()
 		PlayerData.forget(player.UserId)
 	end)
 	RankedQueue.init({ fire = fire, startLocal = startLocalRanked })
+	Progression.start(fire)
 	if RankedRoom.isRoom() then
 		task.spawn(RankedRoom.start, { fire = fire, startRanked = MatchService.startRanked })
 	end

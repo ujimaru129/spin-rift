@@ -7,7 +7,11 @@
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Rating = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rank"):WaitForChild("Rating"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Rating = require(Shared:WaitForChild("Rank"):WaitForChild("Rating"))
+local Season = Shared:WaitForChild("Season")
+local BattlePass = require(Season:WaitForChild("BattlePass"))
+local Cosmetics = require(Season:WaitForChild("Cosmetics"))
 
 local PlayerData = {}
 
@@ -26,6 +30,14 @@ export type Data = {
 	leaveBanUntil: number, -- os.time() until which ranked play is blocked for leaving too often
 	season: number,
 	tutorialDone: boolean,
+	-- season content
+	passSeason: number,
+	passXp: number,
+	premium: boolean, -- owns this season's Premium pass
+	lastWinDay: number, -- UTC day of the last first-win-of-the-day bonus
+	items: { [string]: boolean }, -- cosmetics owned (kept across seasons)
+	equipped: { paddle: string, trail: string, title: string },
+	arena: string, -- last arena picked on the menu
 }
 
 local cache: { [number]: Data } = {}
@@ -44,6 +56,13 @@ local function fresh(): Data
 		leaveBanUntil = 0,
 		season = PlayerData.SEASON,
 		tutorialDone = false,
+		passSeason = BattlePass.SEASON,
+		passXp = 0,
+		premium = false,
+		lastWinDay = 0,
+		items = {},
+		equipped = table.clone(Cosmetics.DEFAULT_EQUIPPED),
+		arena = "Rooftop",
 	}
 end
 
@@ -56,6 +75,20 @@ local function normalize(raw: any): Data
 				(d :: any)[k] = raw[k]
 			end
 		end
+	end
+	for _, id in Cosmetics.STARTER do
+		d.items[id] = true
+	end
+	for kind, id in Cosmetics.DEFAULT_EQUIPPED do
+		if type((d.equipped :: any)[kind]) ~= "string" then
+			(d.equipped :: any)[kind] = id
+		end
+	end
+	if d.passSeason < BattlePass.SEASON then
+		-- a new Battle Pass: progress starts over, items stay
+		d.passSeason = BattlePass.SEASON
+		d.passXp = 0
+		d.premium = false
 	end
 	if d.season < PlayerData.SEASON then
 		d.rating = Rating.seasonReset(d.rating)

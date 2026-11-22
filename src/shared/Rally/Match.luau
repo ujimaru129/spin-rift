@@ -34,6 +34,7 @@ export type Match = typeof(setmetatable(
 		barrier: { boolean },
 		slowedUntil: { number }, -- Gravity Well: server time each player's movement is slowed until
 		whiffed: Trajectory.Shot?, -- a barrier-protected miss: no second swing at the same ball
+		windAt: ((time: number) -> number)?, -- arena wind (casual Sakura Float), nil for none
 	},
 	Match
 ))
@@ -46,7 +47,9 @@ function Match.other(index: number): number
 	return if index == 1 then 2 else 1
 end
 
-function Match.new(now: number, firstServer: number?, loadouts: { { string } }?): Match
+export type Options = { windAt: ((time: number) -> number)? }
+
+function Match.new(now: number, firstServer: number?, loadouts: { { string } }?, options: Options?): Match
 	local first = firstServer or 1
 	local l = loadouts or { {}, {} }
 	return setmetatable({
@@ -68,6 +71,7 @@ function Match.new(now: number, firstServer: number?, loadouts: { { string } }?)
 		barrier = { false, false },
 		slowedUntil = { 0, 0 },
 		whiffed = nil :: Trajectory.Shot?,
+		windAt = if options then options.windAt else nil,
 	}, Match)
 end
 
@@ -93,7 +97,7 @@ function Match.serve(self: Match, now: number, fromZ: number, aimZ: number): { E
 	end
 	local side = Match.sideOf(self.server)
 	local from = Vector3.new(side * Config.HitX, Config.HitY, fromZ)
-	local shot = Trajectory.plan(from, side, aimZ, "Serve", now)
+	local shot = Trajectory.plan(from, side, aimZ, "Serve", now, nil, self:wind(now))
 	self.shot = shot
 	self.receiver = Match.other(self.server)
 	self.rally = 0
@@ -178,7 +182,7 @@ function Match._returnBall(self: Match, index: number, time: number, grade: stri
 	if grade == "Barrier" then
 		ability = "BarrierReturn"
 	end
-	local nextShot = Trajectory.plan(from, side, aimZ, kind, time, ability)
+	local nextShot = Trajectory.plan(from, side, aimZ, kind, time, ability, self:wind(time))
 	self.shot = nextShot
 	self.receiver = Match.other(index)
 	table.insert(events, 1, {
@@ -290,6 +294,12 @@ function Match.useAbility(self: Match, index: number, slot: number, now: number,
 	used.gauge = self.gauge[index]
 	table.insert(events, 1, used)
 	return events
+end
+
+-- Arena wind right now (0 when the arena has none).
+function Match.wind(self: Match, time: number): number
+	local f = self.windAt
+	return if f then f(time) else 0
 end
 
 -- Movement speed multiplier for a player right now (Gravity Well).

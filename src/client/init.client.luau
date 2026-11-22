@@ -17,6 +17,10 @@ local Matchmaker = require(Shared:WaitForChild("Rank"):WaitForChild("Matchmaker"
 local S = require(Shared:WaitForChild("Strings"))
 local BallView = require(script.BallView)
 local Hud = require(script.Hud)
+local ArenaLook = require(script.ArenaLook)
+local SeasonFolder = Shared:WaitForChild("Season")
+local Arenas = require(SeasonFolder:WaitForChild("Arenas"))
+local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -31,6 +35,8 @@ local abilityRemote = Net.get(Net.USE_ABILITY)
 local helloRemote = Net.get(Net.HELLO)
 local leaderboardRemote = Net.get(Net.REQUEST_LEADERBOARD)
 local feedbackRemote = Net.get(Net.SEND_FEEDBACK)
+local equipRemote = Net.get(Net.EQUIP)
+local premiumRemote = Net.get(Net.BUY_PREMIUM)
 local matchEvent = Net.get(Net.MATCH_EVENT)
 
 local ball = BallView.new()
@@ -42,6 +48,9 @@ local stickAim = 0
 local shake = 0
 local cameraZ = 0
 local lastSwingSent = 0
+local selectedArena = Arenas.DEFAULT
+local bestRating = 1000
+local windActive = false
 
 -- what the ability buttons need to know
 local myLoadout: { string } = {}
@@ -118,17 +127,28 @@ local function useAbility(slot: number)
 	end
 end
 
+local function arenaButtonText(): string
+	local a = Arenas.get(selectedArena) or Arenas.List[1]
+	local text = S.t("menu.arena", { name = S.t("arena." .. a.id) })
+	if bestRating < a.unlockRating then
+		text ..= "  (" .. S.t("arena.locked", { rank = S.rank(a.unlockRank) }) .. ")"
+	elseif a.wind then
+		text ..= "\n" .. S.t("arena.windNote")
+	end
+	return text
+end
+
 local hud
 hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 	onMode = function(mode: string)
 		currentMode = mode
-		requestRemote:FireServer(mode, hud:getLoadout())
+		requestRemote:FireServer(mode, hud:getLoadout(), selectedArena)
 	end,
 	onLeave = function()
 		leaveRemote:FireServer()
 	end,
 	onRetry = function()
-		requestRemote:FireServer(currentMode, hud:getLoadout())
+		requestRemote:FireServer(currentMode, hud:getLoadout(), selectedArena)
 	end,
 	onSwingButton = swing,
 	onAbility = useAbility,
@@ -136,14 +156,32 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 		leaderboardRemote:FireServer(scope)
 	end,
 	onLanguage = function()
-		S.setLocale(if S.locale() == "ja" then "en" else "ja")
+		S.setLocale(S.nextLocale())
 		hud:relabel()
+		hud:setArenaButton(arenaButtonText())
+	end,
+	onArena = function()
+		local i = 1
+		for n, a in Arenas.List do
+			if a.id == selectedArena then
+				i = n
+			end
+		end
+		selectedArena = Arenas.List[(i % #Arenas.List) + 1].id
+		hud:setArenaButton(arenaButtonText())
+	end,
+	onBuyPremium = function()
+		premiumRemote:FireServer()
+	end,
+	onEquip = function(kind: string, id: string)
+		equipRemote:FireServer(kind, id)
 	end,
 	onFeedback = function(category: string, text: string)
 		feedbackRemote:FireServer(category, text, S.locale())
 	end,
 })
 hud:showMenu()
+hud:setArenaButton(arenaButtonText())
 
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then
@@ -300,6 +338,9 @@ end
 
 local function endMatchView()
 	origin = nil
+	windActive = false
+	hud:setWind(nil)
+	ArenaLook.apply(nil)
 	ball:hide()
 	camera.CameraType = Enum.CameraType.Custom
 	camera.FieldOfView = 70
@@ -330,8 +371,32 @@ local function onEvent(e: { [string]: any })
 		hud:setMenuNote(S.t(if e.reason == "noshow" then "menu.noShow" else "menu.teleportFailed"))
 	elseif kind == "Profile" then
 		hud:setProfile(e)
+		bestRating = e.best or bestRating
+		if e.arena and Arenas.get(e.arena) then
+			selectedArena = e.arena
+		end
+		hud:setArenaButton(arenaButtonText())
+		if e.pass then
+			hud:setPassState(e.pass)
+		end
 		if not e.tutorialDone and hud.menuNote.Text == "" then
 			hud:setMenuNote(S.t("menu.tryTutorial"), true)
+		end
+	elseif kind == "PassUpdate" then
+		hud:setPassState(e.state)
+		if e.gained and e.gained > 0 then
+			local text = S.t("pass.xpGain", { xp = e.gained })
+			if e.daily then
+				text = S.t("pass.dailyBonus") .. "  " .. text
+			end
+			hud:announceAbility(text, Palette.Grade.Perfect)
+		end
+		if e.levelAfter and e.levelBefore and e.levelAfter > e.levelBefore then
+			hud:popupText(S.t("pass.levelUp", { n = e.levelAfter }), Palette.Grade.Perfect)
+		end
+		local newItems = e.newItems or {}
+		if #newItems > 0 then
+			hud:setMenuNote(S.t("pass.newItem", { item = S.item(newItems[#newItems]) }), true)
 		end
 	elseif kind == "FeedbackResult" then
 		hud:feedbackResult(e.status)
@@ -354,6 +419,17 @@ local function onEvent(e: { [string]: any })
 		ball:hide()
 		tutorialStep = nil
 		hud:showMatch(opponentLabel(e))
+		-- arena look, wind, and both players' cosmetics
+		ArenaLook.apply(e.arena)
+		windActive = e.wind == true
+		local looks = e.looks or {}
+		local function trailOf(look: any): Color3?
+			local item = if look and look.trail ~= "" then Cosmetics.get(look.trail) else nil
+			return if item and item.rgb then Color3.fromRGB(item.rgb[1], item.rgb[2], item.rgb[3]) else nil
+		end
+		ball:setTrails(trailOf(looks[1]), trailOf(looks[2]))
+		local myLook, theirLook = looks[me], looks[them()]
+		hud:setTitles(if myLook then myLook.title else "", if theirLook then theirLook.title else "", opponentLabel(e))
 		hud:setSlots(myLoadout)
 		refreshSlots()
 		local theirs = e.opponentLoadout or {}
@@ -480,6 +556,14 @@ RunService.RenderStepped:Connect(function(dt)
 		cf *= CFrame.new(math.random() * k - k / 2, math.random() * k - k / 2, 0)
 	end
 	camera.CFrame = cf
+	if windActive then
+		-- arrows in the direction the wind pushes, as seen on screen
+		local w = Arenas.windAt(now())
+		local onScreen = w * (if camera.CFrame.RightVector:Dot(Vector3.zAxis) >= 0 then 1 else -1)
+		local n = math.clamp(math.ceil(math.abs(w) / 0.3), 1, 3)
+		local arrow = string.rep(if onScreen >= 0 then "▶" else "◀", n)
+		hud:setWind(S.t("hud.wind", { arrow = if math.abs(w) < 0.08 then "・" else arrow }))
+	end
 end)
 
 -- Ready: ask the server for our rank and anything else it needs to tell us.

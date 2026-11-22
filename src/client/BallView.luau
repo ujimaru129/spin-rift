@@ -32,6 +32,7 @@ export type BallView = typeof(setmetatable(
 		lateBy: number,
 		ghosts: { Part },
 		baseColor: Color3,
+		trails: { [number]: Color3? }, -- cosmetic trail colour by hitter side
 	},
 	BallView
 ))
@@ -134,6 +135,7 @@ function BallView.new(): BallView
 		lateBy = 0,
 		ghosts = ghosts,
 		baseColor = Color3.new(1, 1, 1),
+		trails = {},
 	}, BallView)
 end
 
@@ -165,9 +167,16 @@ local function abilityColor(id: string?): Color3?
 	return if def then Color3.fromRGB(def.rgb[1], def.rgb[2], def.rgb[3]) else nil
 end
 
+-- Cosmetic trail colours for the two sides (side -1 = player 1). nil = the normal colours.
+function BallView.setTrails(self: BallView, left: Color3?, right: Color3?)
+	self.trails = { [-1] = left, [1] = right }
+end
+
 function BallView._style(self: BallView, shot: Trajectory.Shot)
 	local fx = shot.effects
-	local color = abilityColor(fx.ability) or Palette.Shot[shot.kind] or Color3.new(1, 1, 1)
+	-- ability shots always keep their ability colour so both players can read them
+	local cosmetic = if fx.ability then nil else self.trails[shot.hitterSide]
+	local color = abilityColor(fx.ability) or cosmetic or Palette.Shot[shot.kind] or Color3.new(1, 1, 1)
 	self.baseColor = color
 	self.trail.Color = ColorSequence.new(color)
 	self.trail.Lifetime = if fx.smash then 0.35 else 0.22

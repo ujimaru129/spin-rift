@@ -34,6 +34,10 @@ function ClosedTest.admit(player: Player): boolean
 		return player:GetRankInGroup(ClosedTest.GROUP_ID)
 	end)
 	if ok and rank >= ClosedTest.MIN_RANK then
+		-- thank-you title for everyone who played the closed test
+		task.spawn(function()
+			require(script.Parent.Progression).grantItem(player.UserId, "title_tester")
+		end)
 		return true
 	end
 	player:Kick(kickMessage())

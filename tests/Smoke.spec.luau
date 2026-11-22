@@ -34,6 +34,13 @@ return function(loader, expect)
 			onAbility = function(slot)
 				table.insert(calls, "ability:" .. slot)
 			end,
+			onLanguage = function() end,
+			onFeedback = function() end,
+			onArena = function() end,
+			onBuyPremium = function() end,
+			onEquip = function(kind, id)
+				table.insert(calls, "equip:" .. kind .. ":" .. id)
+			end,
 		})
 		return hud, calls
 	end
@@ -509,13 +516,22 @@ return function(loader, expect)
 			end,
 		},
 		{
-			"every text has Japanese and English, and the HUD redraws in English",
+			"every text has all six languages, and the HUD redraws in English",
 			function()
 				local S = loader.require("src/shared/Strings")
-				expect(#S.missing()).toBe(0)
+				local Cosmetics = loader.require("src/shared/Season/Cosmetics")
+				local ids = {}
+				for _, item in Cosmetics.List do
+					table.insert(ids, item.id)
+				end
+				local missing = S.missing(ids)
+				if #missing > 0 then
+					error("missing translations: " .. table.concat(missing, ", "))
+				end
 				expect(S.fromLocaleId("ja-jp")).toBe("ja")
 				expect(S.fromLocaleId("en-us")).toBe("en")
-				expect(S.fromLocaleId("pt-br")).toBe("en")
+				expect(S.fromLocaleId("pt-br")).toBe("pt")
+				expect(S.fromLocaleId("fr-fr")).toBe("en")
 				S.setLocale("en")
 				expect(S.t("hud.rally", { n = 5 })).toBe("Rally 5")
 				expect(S.rank("Gold", "II")).toBe("Gold II")
@@ -566,13 +582,10 @@ return function(loader, expect)
 									roblox.CFrame.new(start.origin + Vector3.new(start.side * 14, 3.5, incoming.to.Z))
 								if steps[#steps] == "ability" and not pressedQ then
 									pressedQ = true
-									UserInputService.InputBegan:Fire(
-										{
-											UserInputType = roblox.Enum.UserInputType.Keyboard,
-											KeyCode = roblox.Enum.KeyCode.Q,
-										},
-										false
-									)
+									UserInputService.InputBegan:Fire({
+										UserInputType = roblox.Enum.UserInputType.Keyboard,
+										KeyCode = roblox.Enum.KeyCode.Q,
+									}, false)
 								end
 							end
 						elseif e.kind == "ServeWait" and start then
@@ -647,11 +660,206 @@ return function(loader, expect)
 				expect(string.find(outsider.__kicked, "クローズドテスト") ~= nil).toBeTruthy()
 				expect(string.find(outsider.__kicked, "closed test") ~= nil).toBeTruthy()
 				local tester = globals.Instance.new("Player")
+				tester.UserId = 900
 				tester.__groups = { [777] = 1 }
 				expect(ClosedTest.admit(tester)).toBe(true)
+				-- testers get a thank-you title
+				expect(Fake.dataStores.PlayerData_v1.u_900.items.title_tester).toBe(true)
 				Fake.studio = true
 				expect(ClosedTest.admit(outsider)).toBe(true) -- Studio is never blocked
 				ClosedTest.ENABLED = false
+			end,
+		},
+		{
+			"the Battle Pass, Premium and cosmetics work end to end",
+			function()
+				local Progression = loader.require("src/server/Progression")
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local me = Fake.localPlayer
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				local function last(kind)
+					for i = #seen, 1, -1 do
+						if seen[i].kind == kind then
+							return seen[i]
+						end
+					end
+					return nil
+				end
+				-- a win: 120 XP plus the first-win-of-the-day bonus of 200
+				local saved = Fake.dataStores.PlayerData_v1["u_" .. me.UserId]
+				saved.lastWinDay = 0 -- earlier tests already won today
+				local before = saved.passXp
+				Progression.awardMatch(me, "Normal", true)
+				local up = last("PassUpdate")
+				expect(up.gained).toBe(320)
+				expect(up.daily).toBe(true)
+				Progression.awardMatch(me, "Normal", true)
+				expect(last("PassUpdate").gained).toBe(120) -- the bonus is once a day
+				Progression.awardMatch(me, "Wall", true)
+				expect(last("PassUpdate").gained).toBe(120) -- the wall gives nothing: no new update
+				expect(Fake.dataStores.PlayerData_v1["u_" .. me.UserId].passXp).toBe(before + 440)
+				-- reach level 10: free rewards at 5 and 10 arrive
+				while Fake.dataStores.PlayerData_v1["u_" .. me.UserId].passXp < 4000 do
+					Progression.awardMatch(me, "Ranked", false)
+				end
+				local data = Fake.dataStores.PlayerData_v1["u_" .. me.UserId]
+				expect(data.passXp >= 4000).toBeTruthy()
+				expect(data.items.title_rookie).toBe(true)
+				expect(data.items.paddle_magenta).toBe(true)
+				expect(data.items.trail_fire).toBe(nil) -- premium only
+				-- Premium in Studio is granted for testing, with every premium reward already reached
+				remotes.BuyPremium:FireServer()
+				up = last("PassUpdate")
+				expect(up.premiumNow).toBe(true)
+				expect(table.find(up.newItems, "trail_fire") ~= nil).toBeTruthy()
+				expect(table.find(up.newItems, "paddle_sakura") ~= nil).toBeTruthy()
+				-- equip what you own; refuse what you do not
+				remotes.Equip:FireServer("trail", "trail_fire")
+				expect(last("PassUpdate").state.equipped.trail).toBe("trail_fire")
+				local count = #seen
+				remotes.Equip:FireServer("trail", "trail_galaxy")
+				expect(#seen).toBe(count)
+				remotes.Equip:FireServer("paddle", "")
+				expect(#seen).toBe(count)
+			end,
+		},
+		{
+			"Sakura Float unlocks at Silver; casual play there has wind, and players show their cosmetics",
+			function()
+				local RunService = globals.game:GetService("RunService")
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local PlayerData = loader.require("src/server/PlayerData")
+				local me = Fake.localPlayer
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				local function lastStart()
+					for i = #seen, 1, -1 do
+						if seen[i].kind == "Start" then
+							return seen[i]
+						end
+					end
+					return nil
+				end
+				PlayerData.get(me.UserId).best = 1000
+				remotes.RequestMatch:FireServer("Easy", { "Curve", "Blink" }, "Sakura")
+				expect(lastStart().arena).toBe("Rooftop") -- still Bronze: not unlocked
+				remotes.LeaveMatch:FireServer()
+				PlayerData.get(me.UserId).best = 1150
+				remotes.RequestMatch:FireServer("Easy", { "Curve", "Blink" }, "Sakura")
+				local start = lastStart()
+				expect(start.arena).toBe("Sakura")
+				expect(start.wind).toBe(true)
+				expect(start.looks[1].trail).toBe("trail_fire")
+				expect(start.looks[2]).toBe(false)
+				local arena = globals.workspace:FindFirstChild("SakuraFloat")
+				expect(arena ~= nil).toBeTruthy()
+				-- play a few seconds so the client draws windy shots
+				for _ = 1, 60 * 6 do
+					Fake.clock.now += 1 / 60
+					RunService.Heartbeat:Fire(1 / 60)
+					RunService.RenderStepped:Fire(1 / 60)
+				end
+				local windy = false
+				for _, e in seen do
+					if e.kind == "Shot" and e.shot.effects.wind then
+						windy = true
+					end
+				end
+				expect(windy).toBe(true)
+				remotes.LeaveMatch:FireServer()
+			end,
+		},
+		{
+			"every text key the client asks for exists",
+			function()
+				local fs = require("@lune/fs")
+				local S = loader.require("src/shared/Strings")
+				local keys = S.keys()
+				local missing = {}
+				for _, file in { "src/client/Hud.luau", "src/client/init.client.luau", "src/client/BallView.luau" } do
+					local src = fs.readFile(file)
+					for key in string.gmatch(src, '"([%a]+%.[%w%.]+)"') do
+						local prefix = string.match(key, "^(%a+)%.")
+						local known = {
+							menu = 1,
+							board = 1,
+							common = 1,
+							wait = 1,
+							search = 1,
+							hud = 1,
+							opponent = 1,
+							level = 1,
+							grade = 1,
+							hint = 1,
+							denied = 1,
+							point = 1,
+							game = 1,
+							ability = 1,
+							result = 1,
+							tut = 1,
+							fb = 1,
+							access = 1,
+							arena = 1,
+							pass = 1,
+							cos = 1,
+						}
+						if known[prefix] and not string.match(key, "%.$") and not keys[key] then
+							table.insert(missing, file .. ": " .. key)
+						end
+					end
+				end
+				if #missing > 0 then
+					error("unknown text keys: " .. table.concat(missing, ", "))
+				end
+			end,
+		},
+		{
+			"the pass and customize screens draw in all six languages, and equipping calls back",
+			function()
+				local S = loader.require("src/shared/Strings")
+				local hud, calls = newHud()
+				hud:setPassState({
+					passXp = 4100,
+					premium = false,
+					items = { "paddle_cyan", "title_rookie", "paddle_magenta", "trail_fire" },
+					equipped = { paddle = "paddle_cyan", trail = "", title = "title_rookie" },
+				})
+				hud:showPass()
+				hud:showCustomize()
+				hud:setWind("風 ▶▶")
+				hud:setTitles("title_rookie", "", "Rival")
+				hud:setArenaButton("アリーナ：サクラ・フロート")
+				for _, locale in S.LOCALES do
+					S.setLocale(locale)
+					hud:relabel()
+					if string.find(hud.passLevel.Text, "10") == nil then
+						error(locale .. ": pass level text " .. hud.passLevel.Text)
+					end
+				end
+				S.setLocale("ja")
+				hud:relabel()
+				expect(hud.myName.Text).toBe("あなた · ルーキー")
+				-- click the owned fire trail, then a locked one
+				local fire, galaxy
+				for _, b in hud.cosGrids.trail:GetChildren() do
+					if b:GetAttribute("ItemId") == "trail_fire" then
+						fire = b
+					elseif b:GetAttribute("ItemId") == "trail_galaxy" then
+						galaxy = b
+					end
+				end
+				fire.Activated:Fire()
+				expect(calls[#calls]).toBe("equip:trail:trail_fire")
+				local n = #calls
+				galaxy.Activated:Fire()
+				expect(#calls).toBe(n)
 			end,
 		},
 	}

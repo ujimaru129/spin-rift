@@ -213,12 +213,127 @@ local function buildZone(model: Model, o: Vector3)
 	end
 end
 
-function Arena.build(origin: Vector3, seed: number): Model
+local SAKURA_PINK = Color3.fromRGB(255, 166, 201)
+local SAKURA_GLOW = Color3.fromRGB(255, 111, 174)
+local LANTERN = Color3.fromRGB(255, 179, 107)
+
+local function sakuraTree(model: Model, at: Vector3, scale: number, rng: Random)
+	part(model, {
+		name = "Trunk",
+		size = Vector3.new(1.2, 8, 1.2) * scale,
+		cframe = CFrame.new(at + Vector3.new(0, 4 * scale, 0)) * CFrame.Angles(0, 0, rng:NextNumber(-0.15, 0.15)),
+		color = Color3.fromRGB(74, 49, 56),
+		material = Enum.Material.Wood,
+		collide = false,
+	})
+	for _ = 1, 6 do
+		local blob = part(model, {
+			name = "Blossom",
+			size = Vector3.one * rng:NextNumber(4, 6.5) * scale,
+			cframe = CFrame.new(
+				at + Vector3.new(rng:NextNumber(-3.5, 3.5), rng:NextNumber(8, 11.5), rng:NextNumber(-3.5, 3.5)) * scale
+			),
+			color = SAKURA_PINK,
+			shape = Enum.PartType.Ball,
+			collide = false,
+		})
+		blob.Transparency = 0.05
+	end
+end
+
+-- Floating garden islands at sunset, cherry trees and lanterns (Sakura Float).
+local function buildSakura(model: Model, o: Vector3, seed: number)
+	local rng = Random.new(seed)
+	for i = 1, 14 do
+		local a = (i / 14) * math.pi * 2 + rng:NextNumber(-0.15, 0.15)
+		local r = rng:NextNumber(45, 110)
+		local s = rng:NextNumber(1, 2.6)
+		local at = o + Vector3.new(math.cos(a) * r, rng:NextNumber(-30, 20), math.sin(a) * r)
+		part(model, {
+			name = "Island",
+			size = Vector3.new(16, 3, 16) * s,
+			cframe = CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, 6), 0),
+			color = Color3.fromRGB(143, 191, 138),
+			material = Enum.Material.Grass,
+			collide = false,
+		})
+		part(model, {
+			name = "IslandRock",
+			size = Vector3.new(13, 10, 13) * s,
+			cframe = CFrame.new(at - Vector3.new(0, 6.5 * s, 0)) * CFrame.Angles(0, rng:NextNumber(0, 6), 0),
+			color = Color3.fromRGB(107, 90, 115),
+			material = Enum.Material.Rock,
+			collide = false,
+		})
+		if rng:NextNumber() < 0.8 then
+			sakuraTree(model, at + Vector3.new(0, 1.5 * s, 0), s * 0.8, rng)
+		end
+	end
+	-- the big tree behind the table
+	sakuraTree(model, o + Vector3.new(-6, -14, -44), 3, rng)
+	for _ = 1, 40 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = rng:NextNumber(26, 60)
+		local lantern = part(model, {
+			name = "Lantern",
+			size = Vector3.one * 0.9,
+			cframe = CFrame.new(o + Vector3.new(math.cos(a) * r, rng:NextNumber(-4, 16), math.sin(a) * r)),
+			color = LANTERN,
+			material = Enum.Material.Neon,
+			shape = Enum.PartType.Ball,
+			collide = false,
+		})
+		local light = Instance.new("PointLight")
+		light.Color = LANTERN
+		light.Range = 8
+		light.Brightness = 1
+		light.Parent = lantern
+	end
+	-- falling petals (the default particle is a soft dot, tinted pink)
+	local emitterPart = part(model, {
+		name = "Petals",
+		size = Vector3.new(60, 1, 60),
+		cframe = CFrame.new(o + Vector3.new(0, 30, 0)),
+		color = SAKURA_PINK,
+		transparency = 1,
+		collide = false,
+	})
+	local petals = Instance.new("ParticleEmitter")
+	petals.Color = ColorSequence.new(SAKURA_PINK)
+	petals.LightEmission = 0.3
+	petals.Size = NumberSequence.new(0.25)
+	petals.Rate = 40
+	petals.Lifetime = NumberRange.new(8, 12)
+	petals.Speed = NumberRange.new(2, 4)
+	petals.SpreadAngle = Vector2.new(30, 30)
+	petals.Acceleration = Vector3.new(1.2, -1.5, 0)
+	petals.Rotation = NumberRange.new(0, 360)
+	petals.RotSpeed = NumberRange.new(-90, 90)
+	petals.EmissionDirection = Enum.NormalId.Bottom
+	petals.Parent = emitterPart
+end
+
+-- Recolours the neon parts shared by every arena (rims, rings, bands) for a theme.
+local function tint(model: Model, from: Color3, to: Color3)
+	for _, p in model:GetChildren() do
+		if p:IsA("BasePart") and p.Material == Enum.Material.Neon and p.Color == from then
+			p.Color = to
+		end
+	end
+end
+
+-- arenaId: "Rooftop" (default) or "Sakura".
+function Arena.build(origin: Vector3, seed: number, arenaId: string?): Model
 	local model = Instance.new("Model")
-	model.Name = "NeonRooftop"
+	model.Name = if arenaId == "Sakura" then "SakuraFloat" else "NeonRooftop"
 	buildPlatform(model, origin)
 	buildTable(model, origin)
-	buildSkyline(model, origin, seed)
+	if arenaId == "Sakura" then
+		tint(model, Palette.TeamA, SAKURA_GLOW)
+		buildSakura(model, origin, seed)
+	else
+		buildSkyline(model, origin, seed)
+	end
 	buildZone(model, origin)
 	model.Parent = workspace
 	return model
@@ -291,7 +406,7 @@ function Arena.buildOpponent(origin: Vector3): Model
 end
 
 -- Gives a character a glowing paddle in the right hand.
-function Arena.attachPaddle(character: Model, color: Color3)
+function Arena.attachPaddle(character: Model, color: Color3, material: Enum.Material?)
 	local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
 	if not hand or not hand:IsA("BasePart") then
 		return
@@ -305,7 +420,7 @@ function Arena.attachPaddle(character: Model, color: Color3)
 	paddle.Shape = Enum.PartType.Cylinder
 	paddle.Size = Vector3.new(0.15, 1.7, 1.7)
 	paddle.Color = color
-	paddle.Material = Enum.Material.Neon
+	paddle.Material = material or Enum.Material.Neon
 	paddle.CanCollide = false
 	paddle.CanQuery = false
 	paddle.Massless = true

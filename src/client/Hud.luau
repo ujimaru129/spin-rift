@@ -12,6 +12,9 @@ local Palette = require(Shared:WaitForChild("Palette"))
 local Abilities = require(Shared:WaitForChild("Rally"):WaitForChild("Abilities"))
 local Rating = require(Shared:WaitForChild("Rank"):WaitForChild("Rating"))
 local S = require(Shared:WaitForChild("Strings"))
+local SeasonFolder = Shared:WaitForChild("Season")
+local BattlePass = require(SeasonFolder:WaitForChild("BattlePass"))
+local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
 
 local FONT = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
 local FONT_REGULAR = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
@@ -31,6 +34,9 @@ export type Callbacks = {
 	onLeaderboard: (scope: string) -> (),
 	onLanguage: () -> (),
 	onFeedback: (category: string, text: string) -> (),
+	onArena: () -> (),
+	onBuyPremium: () -> (),
+	onEquip: (kind: string, id: string) -> (),
 }
 
 export type Slot = { frame: TextButton, name: TextLabel, cost: TextLabel, key: TextLabel, stroke: UIStroke }
@@ -98,6 +104,18 @@ export type Hud = typeof(setmetatable(
 		resultScore: TextLabel,
 		resultNote: TextLabel,
 		rankLine: TextLabel,
+		arenaButton: TextButton,
+		wind: TextLabel,
+		myName: TextLabel,
+		pass: Frame,
+		passLevel: TextLabel,
+		passXp: TextLabel,
+		passBuy: TextButton,
+		passRows: ScrollingFrame,
+		customize: Frame,
+		cosGrids: { [string]: Frame },
+		passState: { [string]: any }?,
+		titles: { string },
 	},
 	Hud
 ))
@@ -280,6 +298,9 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		end),
 		"menu.casual"
 	)
+	local arenaButton = button(menu, "", Palette.Grade.Good, callbacks.onArena)
+	arenaButton.TextSize = 15
+	arenaButton.Size = UDim2.new(1, 0, 0, 40)
 	bind(label(menu, "", 13, INK_DIM, FONT), "menu.practice").TextXAlignment = Enum.TextXAlignment.Left
 	local practice = grid(menu, 2)
 	for _, m in
@@ -311,6 +332,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	help.TextXAlignment = Enum.TextXAlignment.Left
 
 	local extras = row(menu, 36)
+	local seasonRow = row(menu, 36)
 
 	-- leaderboard
 	local leaderboard = panel(gui, "Leaderboard")
@@ -375,6 +397,59 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	)
 	fbClose.Size = UDim2.new(1, 0, 0, 36)
 
+	-- battle pass
+	local pass = panel(gui, "BattlePass")
+	centered(pass, 360)
+	pass.Visible = false
+	vlist(pass, 6)
+	bind(label(pass, "", 20, Palette.Grade.Perfect), "pass.title")
+	local passLevel = label(pass, "", 16, INK)
+	local passXp = label(pass, "", 13, INK_DIM, FONT_REGULAR)
+	bind(label(pass, "", 12, INK_DIM, FONT_REGULAR), "pass.howXp").Size = UDim2.new(1, 0, 0, 32)
+	local passBuy = button(pass, "", Palette.Grade.Perfect, callbacks.onBuyPremium)
+	passBuy.TextSize = 15
+	local passRows = Instance.new("ScrollingFrame")
+	passRows.BackgroundTransparency = 1
+	passRows.BorderSizePixel = 0
+	passRows.Size = UDim2.new(1, 0, 0, 220)
+	passRows.CanvasSize = UDim2.new()
+	passRows.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	passRows.ScrollBarThickness = 4
+	passRows.Parent = pass
+	ordered(passRows)
+	local prl = Instance.new("UIListLayout")
+	prl.SortOrder = Enum.SortOrder.LayoutOrder
+	prl.Padding = UDim.new(0, 2)
+	prl.Parent = passRows
+	bind(
+		button(pass, "", Palette.TeamB, function()
+			pass.Visible = false
+		end),
+		"common.close"
+	).Size =
+		UDim2.new(1, 0, 0, 36)
+
+	-- customize
+	local customize = panel(gui, "Customize")
+	centered(customize, 360)
+	customize.Visible = false
+	vlist(customize, 6)
+	bind(label(customize, "", 20, Palette.TeamA), "cos.title")
+	local cosGrids: { [string]: Frame } = {}
+	for _, kind in Cosmetics.KINDS do
+		local key = if kind == "paddle" then "cos.paddle" elseif kind == "trail" then "cos.trail" else "cos.titleSlot"
+		bind(label(customize, "", 14, INK, FONT), key).TextXAlignment = Enum.TextXAlignment.Left
+		local count = #Cosmetics.ofKind(kind) + (if kind == "paddle" then 0 else 1)
+		cosGrids[kind] = grid(customize, math.ceil(count / 2))
+	end
+	bind(
+		button(customize, "", Palette.TeamB, function()
+			customize.Visible = false
+		end),
+		"common.close"
+	).Size =
+		UDim2.new(1, 0, 0, 36)
+
 	-- waiting for an opponent
 	local waiting = panel(gui, "Waiting")
 	centered(waiting, 340)
@@ -431,7 +506,6 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		return n, games, serve
 	end
 	local myName, myGames, myServe = side(0, Palette.TeamA, Enum.TextXAlignment.Left)
-	bind(myName, "hud.you")
 	local theirName, theirGames, theirServe = side(0.5, Palette.TeamB, Enum.TextXAlignment.Right)
 	theirName.Position += UDim2.fromOffset(60, 0)
 	theirGames.Position += UDim2.fromOffset(60, 0)
@@ -457,6 +531,13 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	rally.AnchorPoint = Vector2.new(0.5, 0)
 	rally.Position = UDim2.new(0.5, 0, 0, 88)
 	rally.Size = UDim2.fromOffset(240, 22)
+
+	local wind = label(match, "", 16, Color3.fromRGB(255, 200, 225))
+	wind.AnchorPoint = Vector2.new(0, 0)
+	wind.Position = UDim2.new(0, 14, 0, 14)
+	wind.Size = UDim2.fromOffset(200, 22)
+	wind.TextXAlignment = Enum.TextXAlignment.Left
+	wind.Visible = false
 
 	local tutorial = label(match, "", 18, Palette.Grade.Good)
 	tutorial.AnchorPoint = Vector2.new(0.5, 0)
@@ -688,6 +769,18 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		resultScore = resultScore,
 		resultNote = resultNote,
 		rankLine = rankLine,
+		arenaButton = arenaButton,
+		wind = wind,
+		myName = myName,
+		pass = pass,
+		passLevel = passLevel,
+		passXp = passXp,
+		passBuy = passBuy,
+		passRows = passRows,
+		customize = customize,
+		cosGrids = cosGrids,
+		passState = nil :: { [string]: any }?,
+		titles = { "", "" },
 	}, Hud)
 
 	-- menu extras: leaderboard, feedback, language
@@ -703,6 +796,26 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		self:showFeedback()
 	end)
 	extra("menu.language", 0.24, callbacks.onLanguage)
+	for _, entry in
+		{
+			{
+				"menu.pass",
+				function()
+					self:showPass()
+				end,
+			},
+			{
+				"menu.customize",
+				function()
+					self:showCustomize()
+				end,
+			},
+		}
+	do
+		local b = bind(button(seasonRow, "", Palette.Grade.Perfect, entry[2]), entry[1])
+		b.Size = UDim2.new(0.5, -3, 1, 0)
+		b.TextSize = 14
+	end
 
 	for _, cat in FEEDBACK_CATEGORIES do
 		local b = bind(
@@ -754,7 +867,8 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	end)
 	boardTabs[2].Activated:Connect(function()
 		callbacks.onLeaderboard(self.boardRegion)
-	end)
+	end);
+	(self :: any).onEquip = callbacks.onEquip
 	self:relabel()
 	return self
 end
@@ -778,6 +892,146 @@ function Hud.relabel(self: Hud)
 	if self.lastBoard then
 		self:showLeaderboard(self.lastBoard.scope, self.lastBoard.rows, self.leaderboard.Visible)
 	end
+	self.myName.Text = S.t("hud.you") .. self.titleSuffix(self.titles[1])
+	if self.passState then
+		self:setPassState(self.passState)
+	end
+end
+
+-- " · <title>" for a title id, "" for none.
+function Hud.titleSuffix(id: string?): string
+	return if id and id ~= "" then " · " .. S.item(id) else ""
+end
+
+function Hud.setArenaButton(self: Hud, text: string)
+	self.arenaButton.Text = text
+end
+
+-- The wind indicator (Sakura Float); nil hides it.
+function Hud.setWind(self: Hud, text: string?)
+	self.wind.Visible = text ~= nil
+	self.wind.Text = text or ""
+end
+
+-- Titles shown next to the names in a match: { mine, theirs } as item ids ("" for none).
+function Hud.setTitles(self: Hud, mine: string, theirs: string, opponentName: string)
+	self.titles = { mine, theirs }
+	self.myName.Text = S.t("hud.you") .. Hud.titleSuffix(mine)
+	self.theirName.Text = opponentName .. Hud.titleSuffix(theirs)
+end
+
+local function itemColor(id: string): Color3
+	local item = Cosmetics.get(id)
+	if item and item.rgb then
+		return Color3.fromRGB(item.rgb[1], item.rgb[2], item.rgb[3])
+	end
+	return Palette.Grade.Perfect
+end
+
+-- Pass and inventory as sent by the server (Profile.pass or PassUpdate.state).
+function Hud.setPassState(self: Hud, state: { [string]: any })
+	self.passState = state
+	local xp = state.passXp
+	local level = BattlePass.level(xp)
+	local into, need = BattlePass.progress(xp)
+	self.passLevel.Text = S.t("pass.level", { n = level, max = BattlePass.MAX_LEVEL })
+	self.passXp.Text = if need > 0 then S.t("pass.xp", { xp = into, need = need }) else ""
+	self.passBuy.Text = if state.premium then S.t("pass.owned") else S.t("pass.buy", { price = BattlePass.PRICE })
+	self.passBuy.Active = not state.premium
+	self.passBuy.AutoButtonColor = not state.premium
+	local owned: { [string]: boolean } = {}
+	for _, id in state.items do
+		owned[id] = true
+	end
+	-- pass rows
+	for _, c in self.passRows:GetChildren() do
+		if c:IsA("TextLabel") then
+			c:Destroy()
+		end
+	end
+	for lv = 1, BattlePass.MAX_LEVEL do
+		local free, premium = BattlePass.Free[lv], BattlePass.Premium[lv]
+		if free or premium then
+			local function cell(id: string?, track: string): string
+				if not id then
+					return ""
+				end
+				local mark = if owned[id] then " ✓" else ""
+				return `{S.t(track)}: {S.item(id)}{mark}`
+			end
+			local parts = {}
+			if free then
+				table.insert(parts, cell(free, "pass.free"))
+			end
+			if premium then
+				table.insert(parts, cell(premium, "pass.premium"))
+			end
+			local r = label(
+				self.passRows,
+				`{S.t("pass.row", { n = lv })}   {table.concat(parts, "   ")}`,
+				13,
+				if lv <= level then INK else INK_DIM,
+				FONT_REGULAR
+			)
+			r.TextXAlignment = Enum.TextXAlignment.Left
+			r.LayoutOrder = lv
+		end
+	end
+	-- customize grids
+	for kind, g in self.cosGrids do
+		for _, c in g:GetChildren() do
+			if c:IsA("TextButton") then
+				c:Destroy()
+			end
+		end
+		local choices: { string } = {}
+		if kind ~= "paddle" then
+			table.insert(choices, "")
+		end
+		for _, item in Cosmetics.ofKind(kind :: any) do
+			table.insert(choices, item.id)
+		end
+		for i, id in choices do
+			local has = id == "" or owned[id] == true
+			local on = (state.equipped :: any)[kind] == id
+			local text = if id == ""
+				then S.t("cos.none")
+				elseif has then S.item(id)
+				else S.item(id) .. " (" .. S.t("cos.locked") .. ")"
+			local b = button(g, text, if id == "" then INK_DIM else itemColor(id), function()
+				if has then
+					self:equipLocal(kind, id)
+				end
+			end)
+			b.LayoutOrder = i
+			b.TextSize = 13
+			b.TextTransparency = if has then 0 else 0.55
+			b.BackgroundColor3 = if on then itemColor(id):Lerp(PANEL, 0.55) else FIELD
+			b:SetAttribute("ItemId", id)
+		end
+	end
+end
+
+-- Set by the client script: sends an equip request.
+function Hud.equipLocal(self: Hud, kind: string, id: string)
+	local cb = (self :: any).onEquip
+	if cb then
+		cb(kind, id)
+	end
+end
+
+function Hud.showPass(self: Hud)
+	self.leaderboard.Visible = false
+	self.feedback.Visible = false
+	self.customize.Visible = false
+	self.pass.Visible = true
+end
+
+function Hud.showCustomize(self: Hud)
+	self.leaderboard.Visible = false
+	self.feedback.Visible = false
+	self.pass.Visible = false
+	self.customize.Visible = true
 end
 
 function Hud.setProfile(self: Hud, p: { [string]: any })
@@ -964,6 +1218,7 @@ function Hud.setTutorial(self: Hud, text: string?)
 end
 
 function Hud.showMenu(self: Hud)
+	self:setWind(nil)
 	self.menu.Visible = true
 	self.match.Visible = false
 	self.result.Visible = false
@@ -972,6 +1227,8 @@ function Hud.showMenu(self: Hud)
 end
 
 function Hud.showMatch(self: Hud, opponentName: string)
+	self.pass.Visible = false
+	self.customize.Visible = false
 	self.rankLine.Visible = false
 	self.leaderboard.Visible = false
 	self.feedback.Visible = false
