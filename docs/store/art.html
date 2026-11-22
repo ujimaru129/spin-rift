@@ -1,0 +1,223 @@
+<!doctype html>
+<!--
+  Store art for SUPER BATTLE PING-PONG!!
+  Render with headless Chrome (see docs/store/README.md):
+    art.html#icon    512x512
+    art.html#key     1920x1080  thumbnail 1
+    art.html#powers  1920x1080  thumbnail 2
+    art.html#ranked  1920x1080  thumbnail 3
+  Colours follow src/shared/Palette.luau (Neon Rooftop).
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@600;800&display=block" rel="stylesheet">
+<style>
+  :root {
+    --cyan: #00e5ff; --magenta: #ff2bd6; --night: #0b0d24; --table: #081426;
+    --line: #ebf5ff; --gold: #ffd23f; --purple: #b44dff; --blue: #4fc3ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--night); overflow: hidden; }
+  .frame { position: relative; overflow: hidden; display: none; font-family: Rubik, sans-serif; color: #fff; }
+  .frame.on { display: block; }
+  .wide { width: 1920px; height: 1080px; }
+  .square { width: 512px; height: 512px; }
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .title {
+    position: absolute; font-family: "Russo One", sans-serif; text-transform: uppercase; line-height: .92;
+    letter-spacing: 2px; color: #fff;
+    text-shadow: 0 0 18px rgba(0,229,255,.9), 0 0 42px rgba(255,43,214,.6), 0 6px 0 #2a0b4a;
+  }
+  .title .pp { color: var(--cyan); }
+  .title .bang { color: var(--magenta); }
+  .tag {
+    position: absolute; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+    padding: 14px 28px; border-radius: 14px; background: rgba(11,13,36,.78);
+    border: 3px solid var(--cyan); box-shadow: 0 0 24px rgba(0,229,255,.55);
+  }
+  .chips { position: absolute; display: grid; grid-template-columns: repeat(4, 380px); gap: 26px; }
+  .chip {
+    height: 150px; border-radius: 22px; background: #0a1428; border: 3px solid;
+    display: flex; align-items: center; gap: 20px; padding: 0 26px; font-weight: 800; font-size: 40px;
+  }
+  .chip .dot { width: 70px; height: 70px; border-radius: 50%; flex: none; box-shadow: 0 0 28px currentColor; }
+  .ladder { position: absolute; display: flex; align-items: flex-end; gap: 26px; }
+  .rank {
+    width: 210px; border-radius: 20px 20px 8px 8px; display: flex; flex-direction: column; justify-content: flex-end;
+    align-items: center; padding-bottom: 24px; font-weight: 800; font-size: 34px; text-transform: uppercase;
+    border: 3px solid; background: linear-gradient(180deg, #2a2e4a, #0a1428);
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ shared scene pieces ============ -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#05061a"/><stop offset=".55" stop-color="#1a0f45"/><stop offset="1" stop-color="#3a1260"/>
+    </linearGradient>
+    <radialGradient id="glowC"><stop offset="0" stop-color="#00e5ff" stop-opacity=".9"/><stop offset="1" stop-color="#00e5ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glowM"><stop offset="0" stop-color="#ff2bd6" stop-opacity=".9"/><stop offset="1" stop-color="#ff2bd6" stop-opacity="0"/></radialGradient>
+    <radialGradient id="ballGlow"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#e6d0ff"/><stop offset="1" stop-color="#b44dff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="trail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4fc3ff" stop-opacity="0"/><stop offset=".6" stop-color="#4fc3ff" stop-opacity=".7"/><stop offset="1" stop-color="#b44dff"/>
+    </linearGradient>
+    <linearGradient id="tableTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d2346"/><stop offset="1" stop-color="#081426"/>
+    </linearGradient>
+    <filter id="blur8"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="blur3"><feGaussianBlur stdDeviation="3"/></filter>
+
+    <!-- paddle drawn with the handle pointing down, centred on the blade -->
+    <g id="paddle">
+      <rect x="-14" y="70" width="28" height="90" rx="10" fill="#2a2f45"/>
+      <rect x="-14" y="70" width="28" height="90" rx="10" fill="none" stroke="#fff" stroke-opacity=".25" stroke-width="3"/>
+      <ellipse cx="0" cy="0" rx="78" ry="88"/>
+    </g>
+  </defs>
+</svg>
+
+<!-- ============ ICON 512 ============ -->
+<div class="frame square" id="icon">
+  <svg viewBox="0 0 512 512">
+    <rect width="512" height="512" fill="url(#sky)"/>
+    <circle cx="140" cy="300" r="220" fill="url(#glowC)" opacity=".45"/>
+    <circle cx="380" cy="230" r="220" fill="url(#glowM)" opacity=".45"/>
+    <!-- table edge -->
+    <polygon points="0,420 512,420 512,512 0,512" fill="url(#tableTop)"/>
+    <line x1="0" y1="420" x2="512" y2="420" stroke="#ebf5ff" stroke-width="8"/>
+    <line x1="256" y1="420" x2="256" y2="512" stroke="#ebf5ff" stroke-width="5" opacity=".8"/>
+    <!-- paddles -->
+    <g transform="translate(150 250) rotate(-28)">
+      <use href="#paddle" fill="#00e5ff"/>
+      <ellipse cx="0" cy="0" rx="78" ry="88" fill="none" stroke="#fff" stroke-width="5" opacity=".7"/>
+    </g>
+    <g transform="translate(362 230) rotate(28)">
+      <use href="#paddle" fill="#ff2bd6"/>
+      <ellipse cx="0" cy="0" rx="78" ry="88" fill="none" stroke="#fff" stroke-width="5" opacity=".7"/>
+    </g>
+    <!-- ghost balls (Phantom) + trail + ball -->
+    <path d="M40 140 Q 180 60 262 120" stroke="url(#trail)" stroke-width="22" fill="none" stroke-linecap="round" filter="url(#blur3)"/>
+    <circle cx="300" cy="96" r="22" fill="#b44dff" opacity=".35"/>
+    <circle cx="300" cy="160" r="22" fill="#b44dff" opacity=".35"/>
+    <circle cx="268" cy="126" r="58" fill="url(#ballGlow)"/>
+    <circle cx="268" cy="126" r="26" fill="#fff"/>
+  </svg>
+  <div class="title" style="left:0; right:0; bottom:26px; text-align:center; font-size:60px;">
+    <span class="pp">PING</span><span class="bang">!</span><span class="pp">PONG</span><span class="bang">!!</span>
+  </div>
+</div>
+
+<!-- ============ shared wide scene (key / powers / ranked reuse it) ============ -->
+<template id="sceneTpl">
+  <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+    <rect width="1920" height="1080" fill="url(#sky)"/>
+    <!-- skyline -->
+    <g fill="#0e1030">
+      <rect x="0" y="420" width="120" height="400"/><rect x="110" y="360" width="90" height="460"/>
+      <rect x="210" y="450" width="140" height="370"/><rect x="360" y="300" width="80" height="520"/>
+      <rect x="450" y="400" width="160" height="420"/><rect x="1300" y="380" width="120" height="440"/>
+      <rect x="1420" y="290" width="90" height="530"/><rect x="1520" y="430" width="170" height="390"/>
+      <rect x="1700" y="340" width="110" height="480"/><rect x="1810" y="410" width="110" height="410"/>
+    </g>
+    <g fill="#ffd29a" opacity=".55">
+      <rect x="130" y="400" width="10" height="14"/><rect x="160" y="440" width="10" height="14"/><rect x="380" y="340" width="10" height="14"/>
+      <rect x="400" y="400" width="10" height="14"/><rect x="480" y="440" width="10" height="14"/><rect x="540" y="470" width="10" height="14"/>
+      <rect x="1330" y="420" width="10" height="14"/><rect x="1440" y="330" width="10" height="14"/><rect x="1460" y="390" width="10" height="14"/>
+      <rect x="1560" y="470" width="10" height="14"/><rect x="1730" y="380" width="10" height="14"/><rect x="1760" y="440" width="10" height="14"/>
+    </g>
+    <g fill="#7ff3ff" opacity=".5">
+      <rect x="250" y="490" width="10" height="14"/><rect x="580" y="430" width="10" height="14"/><rect x="1610" y="480" width="10" height="14"/>
+      <rect x="1840" y="450" width="10" height="14"/><rect x="1360" y="470" width="10" height="14"/>
+    </g>
+    <!-- rooftop floor -->
+    <polygon points="0,760 1920,760 1920,1080 0,1080" fill="#0e101a"/>
+    <!-- table in perspective -->
+    <polygon points="560,640 1360,640 1640,960 280,960" fill="url(#tableTop)"/>
+    <polygon points="560,640 1360,640 1640,960 280,960" fill="none" stroke="#ebf5ff" stroke-width="7"/>
+    <line x1="960" y1="640" x2="960" y2="960" stroke="#ebf5ff" stroke-width="4" opacity=".7"/>
+    <polygon points="280,960 1640,960 1640,990 280,990" fill="#05070f"/>
+    <!-- net -->
+    <polygon points="430,790 1490,790 1490,740 430,740" fill="#ebf5ff" opacity=".18"/>
+    <line x1="430" y1="740" x2="1490" y2="740" stroke="#ebf5ff" stroke-width="6"/>
+    <!-- neon rim lights -->
+    <line x1="280" y1="990" x2="1640" y2="990" stroke="#00e5ff" stroke-width="6" filter="url(#blur3)"/>
+    <circle cx="300" cy="700" r="420" fill="url(#glowC)" opacity=".28"/>
+    <circle cx="1620" cy="640" r="420" fill="url(#glowM)" opacity=".28"/>
+  </svg>
+</template>
+
+<!-- KEY ART -->
+<div class="frame wide" id="key">
+  <div class="scene"></div>
+  <svg viewBox="0 0 1920 1080">
+    <g transform="translate(340 700) rotate(-22) scale(2.2)">
+      <use href="#paddle" fill="#00e5ff"/>
+      <ellipse cx="0" cy="0" rx="78" ry="88" fill="none" stroke="#fff" stroke-width="4" opacity=".7"/>
+    </g>
+    <g transform="translate(1590 600) rotate(24) scale(2)">
+      <use href="#paddle" fill="#ff2bd6"/>
+      <ellipse cx="0" cy="0" rx="78" ry="88" fill="none" stroke="#fff" stroke-width="4" opacity=".7"/>
+    </g>
+    <path d="M520 560 Q 900 360 1260 520" stroke="url(#trail)" stroke-width="46" fill="none" stroke-linecap="round" filter="url(#blur8)"/>
+    <path d="M520 560 Q 900 360 1260 520" stroke="url(#trail)" stroke-width="16" fill="none" stroke-linecap="round"/>
+    <circle cx="1330" cy="470" r="30" fill="#b44dff" opacity=".35"/>
+    <circle cx="1330" cy="590" r="30" fill="#b44dff" opacity=".35"/>
+    <circle cx="1280" cy="530" r="110" fill="url(#ballGlow)"/>
+    <circle cx="1280" cy="530" r="40" fill="#fff"/>
+  </svg>
+  <div class="title" style="left:0; right:0; top:70px; text-align:center; font-size:150px;">
+    Super Battle<br><span class="pp">Ping-Pong</span><span class="bang">!!</span>
+  </div>
+  <div class="tag" style="left:50%; transform:translateX(-50%); bottom:40px; font-size:46px;">1v1 &middot; Abilities &middot; Ranked</div>
+</div>
+
+<!-- ABILITIES -->
+<div class="frame wide" id="powers">
+  <div class="scene"></div>
+  <div style="position:absolute; inset:0; background:rgba(11,13,36,.55)"></div>
+  <div class="title" style="left:0; right:0; top:80px; text-align:center; font-size:120px;">
+    Pick <span class="pp">2</span> of <span class="bang">8</span> Abilities
+  </div>
+  <div class="chips" style="left:50%; transform:translateX(-50%); top:360px;">
+    <div class="chip" style="border-color:#00e5ff"><span class="dot" style="background:#00e5ff;color:#00e5ff"></span>Curve</div>
+    <div class="chip" style="border-color:#ff5060"><span class="dot" style="background:#ff5060;color:#ff5060"></span>Smash</div>
+    <div class="chip" style="border-color:#b44dff"><span class="dot" style="background:#b44dff;color:#b44dff"></span>Phantom</div>
+    <div class="chip" style="border-color:#c8d2e6"><span class="dot" style="background:#c8d2e6;color:#c8d2e6"></span>Blind</div>
+    <div class="chip" style="border-color:#ffd23f"><span class="dot" style="background:#ffd23f;color:#ffd23f"></span>Time Slow</div>
+    <div class="chip" style="border-color:#4fc3ff"><span class="dot" style="background:#4fc3ff;color:#4fc3ff"></span>Barrier</div>
+    <div class="chip" style="border-color:#ff2bd6"><span class="dot" style="background:#ff2bd6;color:#ff2bd6"></span>Gravity Well</div>
+    <div class="chip" style="border-color:#7ff3ff"><span class="dot" style="background:#7ff3ff;color:#7ff3ff"></span>Blink</div>
+  </div>
+  <div class="tag" style="left:50%; transform:translateX(-50%); bottom:70px; font-size:44px;">Outsmart your opponent!</div>
+</div>
+
+<!-- RANKED -->
+<div class="frame wide" id="ranked">
+  <div class="scene"></div>
+  <div style="position:absolute; inset:0; background:rgba(11,13,36,.55)"></div>
+  <div class="title" style="left:0; right:0; top:80px; text-align:center; font-size:120px;">
+    <span class="pp">Ranked</span> Worldwide
+  </div>
+  <div class="ladder" style="left:50%; transform:translateX(-50%); bottom:170px;">
+    <div class="rank" style="height:220px; border-color:#cd7f32; color:#ffb070">Bronze</div>
+    <div class="rank" style="height:300px; border-color:#c8d2e6; color:#e6eefa">Silver</div>
+    <div class="rank" style="height:380px; border-color:#ffd23f; color:#ffd23f">Gold</div>
+    <div class="rank" style="height:460px; border-color:#4fc3ff; color:#7fd8ff">Diamond</div>
+    <div class="rank" style="height:540px; border-color:#b44dff; color:#d39bff">Master</div>
+    <div class="rank" style="height:620px; border-color:#ff2bd6; color:#ff8ae8; font-size:30px; text-align:center">Rift<br>Legend</div>
+  </div>
+  <div class="tag" style="left:50%; transform:translateX(-50%); bottom:50px; font-size:44px;">Top 100 of your region</div>
+</div>
+
+<script>
+  const id = (location.hash || "#key").slice(1);
+  const tpl = document.getElementById("sceneTpl");
+  document.querySelectorAll(".scene").forEach((s) => s.replaceWith(tpl.content.cloneNode(true)));
+  document.getElementById(id).classList.add("on");
+</script>
+</body>
+</html>
