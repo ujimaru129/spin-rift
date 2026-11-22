@@ -22,7 +22,7 @@ Progression.PREMIUM_PASS_ID = 0
 
 export type Fire = (player: Player, event: { [string]: any }) -> ()
 
-local fire: Fire = function() end
+local fire: Fire = function(_player, _event) end
 
 -- What the client needs to draw the pass and the customize screen.
 function Progression.state(data: PlayerData.Data): { [string]: any }

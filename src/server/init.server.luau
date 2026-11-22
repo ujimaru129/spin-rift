@@ -9,7 +9,8 @@ local MatchService = require(script.MatchService)
 local ClosedTest = require(script.ClosedTest)
 
 -- Night-time neon look. Lighting.Technology cannot be set from a script:
--- set it to Future in Studio (Lighting > Technology) for the best result.
+-- default.project.json sets it to Future in places made with `rojo build`; when syncing into
+-- an empty place with `rojo serve`, set it in Studio (Lighting > Technology).
 local function setupLighting()
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 1.2

@@ -19,6 +19,11 @@
         }
       }
     },
+    "Lighting": {
+      "$properties": {
+        "Technology": "Future"
+      }
+    },
     "Workspace": {
       "$properties": {
         "Gravity": 196.2

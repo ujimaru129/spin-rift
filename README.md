@@ -34,7 +34,7 @@
    rojo serve
    ```
 
-5. Studio で Lighting の Technology を **Future** にする（スクリプトからは変更できないため）
+5. Lighting の Technology は **Future** にする。`rojo build` で作った place には `default.project.json` で最初から入っている。`rojo serve` で空の Place に同期するときは、Studio で手で Future にする（スクリプトからは変更できないため）
 6. Play（F5）で遊ぶ
 
 VS Code を使う場合は `.vscode/extensions.json` の推奨拡張（Rojo、luau-lsp、StyLua、selene）を入れてください。
