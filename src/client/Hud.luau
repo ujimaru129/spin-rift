@@ -185,7 +185,22 @@ local function button(parent: Instance, text: string, accent: Color3, onClick: (
 	return ordered(b)
 end
 
-local function vlist(parent: Instance, padding: number)
+-- Size a ScrollingFrame's canvas from its list's real content height. AutomaticCanvasSize
+-- comes out short in Studio (it misses the padding and the last rows), so on a short screen
+-- the bottom of the menu could not be scrolled into view.
+local function fitCanvas(frame: ScrollingFrame, layout: UIListLayout, extra: number)
+	frame.AutomaticCanvasSize = Enum.AutomaticSize.None
+	local function fit()
+		local content = layout.AbsoluteContentSize
+		if content then
+			frame.CanvasSize = UDim2.fromOffset(0, content.Y + extra)
+		end
+	end
+	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fit)
+	fit()
+end
+
+local function vlist(parent: Instance, padding: number): UIListLayout
 	local l = Instance.new("UIListLayout")
 	l.FillDirection = Enum.FillDirection.Vertical
 	l.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -198,6 +213,7 @@ local function vlist(parent: Instance, padding: number)
 	p.PaddingLeft = UDim.new(0, 18)
 	p.PaddingRight = UDim.new(0, 18)
 	p.Parent = parent
+	return l
 end
 
 local function row(parent: Instance, height: number): Frame
@@ -259,7 +275,6 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	menu.Position = UDim2.fromScale(0.5, 0.5)
 	menu.Size = UDim2.fromScale(0.94, 0.92)
 	menu.CanvasSize = UDim2.new()
-	menu.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	menu.ScrollBarThickness = 4
 	menu.Parent = gui
 	corner(menu, 8)
@@ -267,7 +282,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local menuMax = Instance.new("UISizeConstraint")
 	menuMax.MaxSize = Vector2.new(400, 860)
 	menuMax.Parent = menu
-	vlist(menu, 10)
+	fitCanvas(menu, vlist(menu, 10), 36) -- 36 = UIPadding top + bottom
 
 	local title = label(menu, "SUPER BATTLE\nPING-PONG!!", 30, Palette.TeamA)
 	title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
@@ -413,7 +428,6 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	passRows.BorderSizePixel = 0
 	passRows.Size = UDim2.new(1, 0, 0, 220)
 	passRows.CanvasSize = UDim2.new()
-	passRows.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	passRows.ScrollBarThickness = 4
 	passRows.Parent = pass
 	ordered(passRows)
@@ -421,6 +435,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	prl.SortOrder = Enum.SortOrder.LayoutOrder
 	prl.Padding = UDim.new(0, 2)
 	prl.Parent = passRows
+	fitCanvas(passRows, prl, 0)
 	bind(
 		button(pass, "", Palette.TeamB, function()
 			pass.Visible = false
@@ -435,12 +450,26 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	customize.Visible = false
 	vlist(customize, 6)
 	bind(label(customize, "", 20, Palette.TeamA), "cos.title")
+	-- the item lists scroll, so the panel (and its Close button) fits on a short screen
+	local cosList = Instance.new("ScrollingFrame")
+	cosList.BackgroundTransparency = 1
+	cosList.BorderSizePixel = 0
+	cosList.Size = UDim2.new(1, 0, 0, 260)
+	cosList.CanvasSize = UDim2.new()
+	cosList.ScrollBarThickness = 4
+	cosList.Parent = customize
+	ordered(cosList)
+	local cll = Instance.new("UIListLayout")
+	cll.SortOrder = Enum.SortOrder.LayoutOrder
+	cll.Padding = UDim.new(0, 6)
+	cll.Parent = cosList
+	fitCanvas(cosList, cll, 0)
 	local cosGrids: { [string]: Frame } = {}
 	for _, kind in Cosmetics.KINDS do
 		local key = if kind == "paddle" then "cos.paddle" elseif kind == "trail" then "cos.trail" else "cos.titleSlot"
-		bind(label(customize, "", 14, INK, FONT), key).TextXAlignment = Enum.TextXAlignment.Left
+		bind(label(cosList, "", 14, INK, FONT), key).TextXAlignment = Enum.TextXAlignment.Left
 		local count = #Cosmetics.ofKind(kind) + (if kind == "paddle" then 0 else 1)
-		cosGrids[kind] = grid(customize, math.ceil(count / 2))
+		cosGrids[kind] = grid(cosList, math.ceil(count / 2))
 	end
 	bind(
 		button(customize, "", Palette.TeamB, function()
@@ -788,6 +817,11 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		local b = bind(button(extras, "", Palette.TeamA, onClick), key)
 		b.Size = UDim2.new(width, -4, 1, 0)
 		b.TextSize = 14
+		-- "Idioma: Português" and the like are wider than the button: shrink to fit
+		b.TextScaled = true
+		local cap = Instance.new("UITextSizeConstraint")
+		cap.MaxTextSize = 14
+		cap.Parent = b
 	end
 	extra("menu.leaderboard", 0.36, function()
 		callbacks.onLeaderboard("GLOBAL")

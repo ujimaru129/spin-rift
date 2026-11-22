@@ -174,6 +174,11 @@ local function newInstance(className: string): any
 		end
 		return copy
 	end
+	function methods:GetPropertyChangedSignal(name)
+		local key = "Changed:" .. name
+		signals[key] = signals[key] or Fake.signal()
+		return signals[key]
+	end
 	function methods:Play() end
 	function methods:Stop() end
 	function methods:GetPivot()
