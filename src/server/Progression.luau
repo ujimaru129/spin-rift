@@ -18,7 +18,7 @@ local Analytics = require(script.Parent.Analytics)
 
 local Progression = {}
 
-Progression.PREMIUM_PASS_ID = 0
+Progression.PREMIUM_PASS_ID = 2096444234
 
 export type Fire = (player: Player, event: { [string]: any }) -> ()
 
