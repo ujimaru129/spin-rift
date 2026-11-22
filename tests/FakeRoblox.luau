@@ -34,6 +34,76 @@ function Fake.signal(): Signal
 end
 
 local PART_CLASSES = { Part = true, SpawnLocation = true }
+
+-- Roblox's own class definitions: every property the game code reads or writes is checked against
+-- them, the way Studio would ("X is not a valid member of Y", read-only properties, wrong types).
+local db = roblox.getReflectionDatabase()
+Fake.problems = {} :: { string }
+
+local function findProperty(className: string, key: string): any
+	local class = db:GetClass(className)
+	while class do
+		local p = class.Properties[key]
+		if p then
+			return p
+		end
+		class = if class.Superclass then db:GetClass(class.Superclass) else nil
+	end
+	return nil
+end
+
+local NUMBER_TYPES = { Float32 = true, Float64 = true, Int32 = true, Int64 = true }
+local DATATYPES = {
+	Bool = "boolean",
+	String = "string",
+	Content = "string",
+	ContentId = "string",
+	Color3 = "Color3",
+	UDim = "UDim",
+	UDim2 = "UDim2",
+	Vector2 = "Vector2",
+	Vector3 = "Vector3",
+	CFrame = "CFrame",
+	NumberSequence = "NumberSequence",
+	ColorSequence = "ColorSequence",
+	NumberRange = "NumberRange",
+	Font = "Font",
+	Rect = "Rect",
+}
+
+local function problem(message: string)
+	table.insert(Fake.problems, message)
+	error(message, 3)
+end
+
+local function checkWrite(className: string, key: string, value: any)
+	if string.sub(key, 1, 2) == "__" or not db:GetClass(className) then
+		return
+	end
+	local p = findProperty(className, key)
+	if not p then
+		problem(`{key} is not a valid member of {className}`)
+	end
+	if p.Scriptability ~= "ReadWrite" and p.Scriptability ~= "Write" then
+		problem(`Unable to assign property {key}. Property is read only ({className})`)
+	end
+	local dt = p.Datatype
+	local t = typeof(value)
+	if NUMBER_TYPES[dt] then
+		if t ~= "number" then
+			problem(`{className}.{key} expects a number, got {t}`)
+		end
+	elseif DATATYPES[dt] then
+		if t ~= DATATYPES[dt] then
+			problem(`{className}.{key} expects {DATATYPES[dt]}, got {t}`)
+		end
+	elseif string.sub(dt, 1, 5) == "Enum." then
+		local enumName = string.sub(dt, 6)
+		if t ~= "EnumItem" or not string.find(tostring(value.EnumType), enumName, 1, true) then
+			problem(`{className}.{key} expects {dt}, got {tostring(value)}`)
+		end
+	end
+end
 local EVENTS = {
 	Activated = true,
 	InputBegan = true,
@@ -174,6 +244,15 @@ local function newInstance(className: string): any
 						return c
 					end
 				end
+				-- not a child either: it must be a real property of the class
+				if
+					type(key) == "string"
+					and string.sub(key, 1, 2) ~= "__"
+					and db:GetClass(className)
+					and not findProperty(className, key)
+				then
+					problem(`{key} is not a valid member of {className}`)
+				end
 			end
 			return v
 		end,
@@ -194,6 +273,9 @@ local function newInstance(className: string): any
 				props.CFrame = roblox.CFrame.new(value)
 				return
 			end
+			if not Fake.setting then
+				checkWrite(className, key, value)
+			end
 			props[key] = value
 		end,
 		__tostring = function()
@@ -202,7 +284,20 @@ local function newInstance(className: string): any
 	})
 end
 
+-- Test setup only: set properties the game itself may not (read-only ones like UserId) or that
+-- stand in for engine methods. Game code goes through the checks above.
+function Fake.set(inst: any, values: { [string]: any })
+	Fake.setting = true
+	for k, v in values do
+		inst[k] = v
+	end
+	Fake.setting = false
+end
+
 function Instance.new(className: string, parent: any?): any
+	if not db:GetClass(className) then
+		problem(`Unable to create an Instance of type "{className}"`)
+	end
 	local x = newInstance(className)
 	if parent then
 		x.Parent = parent
@@ -333,7 +428,7 @@ Fake.reserved = 0
 function Fake.globals(sharedNode: any)
 	local workspace = Instance.new("Workspace")
 	local camera = Instance.new("Camera", workspace)
-	camera.ViewportSize = roblox.Vector2.new(1280, 720)
+	Fake.set(camera, { ViewportSize = roblox.Vector2.new(1280, 720) })
 	camera.CFrame = roblox.CFrame.new()
 	camera.FieldOfView = 70
 	workspace.CurrentCamera = camera
@@ -390,7 +485,7 @@ function Fake.globals(sharedNode: any)
 		LocalizationService = {
 			RobloxLocaleId = "ja-jp",
 			GetCountryRegionForPlayerAsync = function(_, player)
-				return player.Country or "JP"
+				return rawget(player, "__props").Country or "JP"
 			end,
 		},
 		MarketplaceService = {

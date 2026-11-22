@@ -66,5 +66,22 @@ for _, name in files do
 	end
 end
 
+-- Engine problems the fake Roblox saw (some are caught by pcall in game code and would
+-- otherwise go unnoticed).
+local fakeOk, Fake = pcall(require, "./FakeRoblox")
+if fakeOk and #Fake.problems > 0 then
+	local unique, seen = {}, {}
+	for _, p in Fake.problems do
+		if not seen[p] then
+			seen[p] = true
+			table.insert(unique, p)
+		end
+	end
+	print("\nengine problems seen during the run:")
+	for _, p in unique do
+		print("  ! " .. p)
+	end
+	failed += 1
+end
 print(`\n{passed} passed, {failed} failed`)
 process.exit(if failed == 0 then 0 else 1)

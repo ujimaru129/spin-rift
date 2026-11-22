@@ -169,9 +169,9 @@ return function(loader, expect)
 				local function makePlayer(name: string)
 					local p = globals.Instance.new("Player")
 					p.Name = name
-					p.DisplayName = name
+					Fake.set(p, { DisplayName = name })
 					nextUserId += 1
-					p.UserId = nextUserId
+					Fake.set(p, { UserId = nextUserId })
 					globals.Instance.new("PlayerGui", p)
 					local character = globals.Instance.new("Model")
 					local root = globals.Instance.new("Part", character)
@@ -182,14 +182,14 @@ return function(loader, expect)
 					hand.CFrame = roblox.CFrame.new(1, 3, 0)
 					local humanoid = globals.Instance.new("Humanoid", character)
 					humanoid.WalkSpeed = 16
-					humanoid.MoveDirection = Vector3.new(0, 0, 0)
+					Fake.set(humanoid, { MoveDirection = Vector3.new(0, 0, 0) })
 					p.Character = character
 					p.Parent = Players
 					return p, root
 				end
 
 				local me, myRoot = makePlayer("Tester")
-				Players.LocalPlayer = me
+				Fake.set(Players, { LocalPlayer = me })
 				Fake.localPlayer = me
 				loader.runScript("src/server/init.server.luau")
 				loader.runScript("src/client/init.client.luau")
@@ -278,8 +278,8 @@ return function(loader, expect)
 				local me = Fake.localPlayer
 				local other = globals.Instance.new("Player")
 				other.Name = "Rival"
-				other.DisplayName = "Rival"
-				other.UserId = 2
+				Fake.set(other, { DisplayName = "Rival" })
+				Fake.set(other, { UserId = 2 })
 				local character = globals.Instance.new("Model")
 				local root = globals.Instance.new("Part", character)
 				root.Name = "HumanoidRootPart"
@@ -334,8 +334,8 @@ return function(loader, expect)
 				-- "Rival" from the previous test left; bring in a fresh opponent
 				local rival = globals.Instance.new("Player")
 				rival.Name = "Rookie"
-				rival.DisplayName = "Rookie"
-				rival.UserId = 3
+				Fake.set(rival, { DisplayName = "Rookie" })
+				Fake.set(rival, { UserId = 3 })
 				local character = globals.Instance.new("Model")
 				local root = globals.Instance.new("Part", character)
 				root.Name = "HumanoidRootPart"
@@ -500,8 +500,8 @@ return function(loader, expect)
 				})
 				expect(started).toBe(nil) -- only player 1 is here so far
 				local guest = globals.Instance.new("Player")
-				guest.UserId = 50
-				guest.DisplayName = "Guest"
+				Fake.set(guest, { UserId = 50 })
+				Fake.set(guest, { DisplayName = "Guest" })
 				guest.Parent = Players
 				Players.PlayerAdded:Fire(guest)
 				expect(started ~= nil).toBeTruthy()
@@ -660,7 +660,7 @@ return function(loader, expect)
 				expect(string.find(outsider.__kicked, "クローズドテスト") ~= nil).toBeTruthy()
 				expect(string.find(outsider.__kicked, "closed test") ~= nil).toBeTruthy()
 				local tester = globals.Instance.new("Player")
-				tester.UserId = 900
+				Fake.set(tester, { UserId = 900 })
 				tester.__groups = { [777] = 1 }
 				expect(ClosedTest.admit(tester)).toBe(true)
 				-- testers get a thank-you title
