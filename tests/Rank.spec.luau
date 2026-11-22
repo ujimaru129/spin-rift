@@ -97,6 +97,18 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"waits are grouped into ranges that match the search steps and the bot offer",
+			function()
+				expect(Matchmaker.waitBucket(0)).toBe("00-10s")
+				expect(Matchmaker.waitBucket(9)).toBe("00-10s")
+				expect(Matchmaker.waitBucket(10)).toBe("10-30s")
+				expect(Matchmaker.waitBucket(30)).toBe("30-60s")
+				expect(Matchmaker.waitBucket(60)).toBe("60-90s")
+				expect(Matchmaker.waitBucket(89)).toBe("60-90s")
+				expect(Matchmaker.waitBucket(90)).toBe("90s+")
+			end,
+		},
+		{
 			"close ratings in one region are paired at once; far ones wait",
 			function()
 				local q = { entry("a", 1000), entry("b", 1040), entry("c", 1500) }

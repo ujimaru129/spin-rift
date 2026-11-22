@@ -19,6 +19,7 @@ local Rank = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rank")
 local Matchmaker = require(Rank:WaitForChild("Matchmaker"))
 local Regions = require(Rank:WaitForChild("Regions"))
 local PlayerData = require(script.Parent.PlayerData)
+local Analytics = require(script.Parent.Analytics)
 
 local RankedQueue = {}
 
@@ -105,12 +106,23 @@ function RankedQueue.join(player: Player, loadout: { string }): (boolean, string
 	return true, nil
 end
 
-function RankedQueue.leave(player: Player): boolean
+-- How long a player waited and how the wait ended, for Creator Dashboard > Analytics.
+-- RankedWait: value = seconds waited; fields = how it ended, wait range, region.
+-- How it ended: "matched", "bot" (took the bot offer), "cancel", "quit" (left the game),
+-- "requeue" (asked for ranked again), "other" (picked another mode).
+local function logWait(player: Player, entry: Matchmaker.Entry, t: number, outcome: string)
+	local waited = math.max(0, math.floor(t - entry.joinedAt + 0.5))
+	Analytics.event(player, "RankedWait", waited, { outcome, Matchmaker.waitBucket(waited), entry.region })
+end
+
+-- Takes a player out of the queue. `why` is how the wait ended (see logWait); default "cancel".
+function RankedQueue.leave(player: Player, why: string?): boolean
 	local w = waiting[player]
 	if not w then
 		return false
 	end
 	waiting[player] = nil
+	logWait(player, w.entry, now(), why or "cancel")
 	if mode == "global" then
 		task.spawn(function()
 			pcall(function()
@@ -122,7 +134,7 @@ function RankedQueue.leave(player: Player): boolean
 end
 
 function RankedQueue.forget(player: Player)
-	RankedQueue.leave(player)
+	RankedQueue.leave(player, "quit")
 	regions[player] = nil
 end
 
@@ -148,6 +160,8 @@ local function tickLocal(t: number)
 	local pairs = Matchmaker.pair(entries, t)
 	for _, pair in pairs do
 		local a, b = byId[pair[1].id], byId[pair[2].id]
+		logWait(a, waiting[a].entry, t, "matched")
+		logWait(b, waiting[b].entry, t, "matched")
 		waiting[a], waiting[b] = nil, nil
 		hooks.startLocal({ a, b }, pair)
 	end
@@ -217,6 +231,7 @@ local function tickGlobal(t: number)
 		end)
 		if ok and assignment and waiting[player] then
 			waiting[player] = nil
+			logWait(player, w.entry, now(), "matched")
 			pcall(function()
 				assignments:RemoveAsync(w.entry.id)
 			end)

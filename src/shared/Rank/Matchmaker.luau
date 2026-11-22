@@ -96,6 +96,20 @@ function Matchmaker.offerBot(waited: number): boolean
 	return waited >= Matchmaker.BOT_OFFER_AFTER
 end
 
+-- Which range a wait falls in, for analytics. The edges match the search steps and the bot offer.
+function Matchmaker.waitBucket(waited: number): string
+	if waited < 10 then
+		return "00-10s"
+	elseif waited < 30 then
+		return "10-30s"
+	elseif waited < 60 then
+		return "30-60s"
+	elseif waited < Matchmaker.BOT_OFFER_AFTER then
+		return "60-90s"
+	end
+	return "90s+"
+end
+
 -- Short description of how wide the search is right now, for the waiting screen.
 function Matchmaker.describe(waited: number): string
 	local w = Matchmaker.window(waited)

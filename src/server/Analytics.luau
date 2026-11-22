@@ -23,7 +23,7 @@ Analytics.Funnel = {
 }
 
 -- What this module sent, for tests: { kind, name, value? }
-Analytics.log = {} :: { { kind: string, name: string, value: any } }
+Analytics.log = {} :: { { kind: string, name: string, value: any, fields: { string }? } }
 
 function Analytics.funnel(player: Player, step: string)
 	local n = Analytics.Funnel[step]
@@ -38,7 +38,7 @@ end
 
 -- A custom event. `fields` are up to three short strings shown as breakdowns in the dashboard.
 function Analytics.event(player: Player, name: string, value: number?, fields: { string }?)
-	table.insert(Analytics.log, { kind = "event", name = name, value = value })
+	table.insert(Analytics.log, { kind = "event", name = name, value = value, fields = fields })
 	pcall(function()
 		local custom = {}
 		for i, f in fields or {} do

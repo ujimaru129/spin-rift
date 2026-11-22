@@ -499,9 +499,10 @@ local function startLocalRanked(players: { Player }, entries: { any })
 end
 
 -- Takes a player out of whatever they are in. In an unfinished match the other player wins.
-local function leave(player: Player)
+-- `why` says how a ranked wait ended if the player was in the ranked queue (see RankedQueue).
+local function leave(player: Player, why: string?)
 	removeFromQueue(player)
-	RankedQueue.leave(player)
+	RankedQueue.leave(player, why)
 	local humanoid = humanoidOf(player)
 	if humanoid then
 		humanoid.WalkSpeed = WALK_SPEED
@@ -545,7 +546,8 @@ local function request(player: Player, mode: unknown, loadout: unknown, arenaReq
 	if mode ~= ONLINE and mode ~= RANKED and mode ~= TUTORIAL and not (Bot.Profiles :: any)[mode] then
 		return
 	end
-	leave(player)
+	local isBot = (Bot.Profiles :: any)[mode] ~= nil
+	leave(player, if isBot then "bot" elseif mode == RANKED then "requeue" else "other")
 	local chosen = Abilities.sanitize(loadout)
 	local arena = chooseArena(player, arenaRequest)
 	if mode == RANKED then
@@ -701,7 +703,7 @@ function MatchService.start()
 	Net.get(Net.REQUEST_MATCH).OnServerEvent:Connect(request)
 	Net.get(Net.LEAVE_MATCH).OnServerEvent:Connect(function(player)
 		local wasPlaying = byPlayer[player] ~= nil
-		leave(player)
+		leave(player, "cancel")
 		fire(player, { kind = "Left" })
 		if wasPlaying then
 			player:LoadCharacter()
@@ -742,7 +744,7 @@ function MatchService.start()
 		end)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
-		leave(player)
+		leave(player, "quit")
 		RankedQueue.forget(player)
 		PlayerData.forget(player.UserId)
 	end)

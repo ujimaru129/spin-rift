@@ -417,9 +417,65 @@ return function(loader, expect)
 				remotes.RequestLeaderboard:FireServer("GLOBAL")
 				expect(seen[#seen].kind).toBe("Leaderboard")
 				expect(seen[#seen].rows[1].rating).toBe(1040)
+				-- both players' waits were logged as matched
+				local Analytics = loader.require("src/server/Analytics")
+				local matched = 0
+				for _, l in Analytics.log do
+					if l.name == "RankedWait" and l.fields and l.fields[1] == "matched" then
+						matched += 1
+						expect(l.fields[2]).toBe("00-10s")
+					end
+				end
+				expect(matched).toBe(2)
 				remotes.LeaveMatch:FireServer()
 				Players.PlayerRemoving:Fire(rival)
 				rival.Parent = nil
+			end,
+		},
+		{
+			"a ranked wait is logged with how long it was and how it ended",
+			function()
+				local Analytics = loader.require("src/server/Analytics")
+				local RunService = globals.game:GetService("RunService")
+				local remotes = globals.game:GetService("ReplicatedStorage"):FindFirstChild("SpinRiftRemotes")
+				local function lastWait()
+					for i = #Analytics.log, 1, -1 do
+						local l = Analytics.log[i]
+						if l.name == "RankedWait" then
+							return l
+						end
+					end
+					return nil
+				end
+				local before = #Analytics.log
+				-- nobody else is queued: wait past the bot offer, then take it
+				remotes.RequestMatch:FireServer("Ranked", { "Curve", "Blink" })
+				for _ = 1, 95 do
+					Fake.clock.now += 1
+					RunService.Heartbeat:Fire(1)
+				end
+				remotes.RequestMatch:FireServer("Normal", { "Curve", "Blink" })
+				local bot = lastWait()
+				expect(bot ~= nil and #Analytics.log > before).toBeTruthy()
+				expect(bot.fields[1]).toBe("bot")
+				expect(bot.fields[2]).toBe("90s+")
+				expect(bot.value).toBe(95)
+				remotes.LeaveMatch:FireServer()
+				-- queue again and cancel after a short wait
+				remotes.RequestMatch:FireServer("Ranked", { "Curve", "Blink" })
+				for _ = 1, 12 do
+					Fake.clock.now += 1
+					RunService.Heartbeat:Fire(1)
+				end
+				remotes.LeaveMatch:FireServer()
+				local cancel = lastWait()
+				expect(cancel.fields[1]).toBe("cancel")
+				expect(cancel.fields[2]).toBe("10-30s")
+				expect(cancel.value).toBe(12)
+				-- leaving without being queued logs nothing more
+				local count = #Analytics.log
+				remotes.LeaveMatch:FireServer()
+				expect(#Analytics.log).toBe(count)
 			end,
 		},
 		{
