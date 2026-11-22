@@ -1,0 +1,119 @@
+{
+  "name": "SpinRift",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "Gravity": 196.2
+      },
+      "Baseplate": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Locked": true,
+          "Size": [
+            512,
+            20,
+            512
+          ],
+          "Color": [
+            0.05,
+            0.06,
+            0.11
+          ],
+          "Material": "SmoothPlastic",
+          "TopSurface": "Smooth",
+          "CFrame": {
+            "CFrame": {
+              "position": [
+                0,
+                -10,
+                0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "SpawnLocation": {
+        "$className": "SpawnLocation",
+        "$properties": {
+          "Anchored": true,
+          "Neutral": true,
+          "Duration": 0,
+          "Size": [
+            12,
+            1,
+            12
+          ],
+          "Color": [
+            0,
+            0.9,
+            1
+          ],
+          "Material": "Neon",
+          "TopSurface": "Smooth",
+          "CFrame": {
+            "CFrame": {
+              "position": [
+                0,
+                0.5,
+                0
+              ],
+              "orientation": [
+                [
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1
+                ]
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

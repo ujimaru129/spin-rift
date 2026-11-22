@@ -1,0 +1,80 @@
+--!strict
+-- Tuning numbers for the rally. Every distance is in studs, in the arena's local space:
+-- the table is centred on the origin, its long side runs along X and the net sits at X = 0.
+-- Side -1 is the player who stands at negative X, side 1 the one at positive X.
+
+local Config = {}
+
+Config.Table = {
+	halfLength = 9, -- the table is 18 studs long
+	halfWidth = 5, -- and 10 studs wide
+	surfaceY = 3, -- height of the playing surface
+	netHeight = 1.2, -- net top above the surface
+}
+
+Config.Ball = {
+	radius = 0.3,
+}
+
+-- Where a paddle meets the ball: |X| of the contact point and its height.
+Config.HitX = 11
+Config.HitY = 4.4
+
+-- How far (in Z) the ball may land from the player and still be returned.
+Config.Reach = 3.2
+
+-- Timing windows, in seconds either side of the moment the ball reaches the paddle.
+-- Perfect gives a fast shot and +2 gauge, Good a normal shot, Weak a slow, high, easy ball.
+-- A swing outside the Weak window, or out of reach, misses.
+Config.Timing = {
+	perfect = 0.06,
+	good = 0.14,
+	weak = 0.24,
+}
+
+-- Swings earlier than this before the ball arrives are ignored rather than counted as a whiff,
+-- so pressing the button too early is not punished harshly while the ball is still far away.
+Config.IgnoreEarlierThan = 0.45
+
+-- Shape of each kind of shot. duration = seconds from contact to the opponent's paddle.
+-- arc1 = extra height over the first leg (to the bounce), arc2 = over the second leg.
+-- depth = where on the opponent's half it bounces, 0 at the net to 1 at the end line.
+export type ShotStyle = { duration: number, arc1: number, arc2: number, depth: number }
+Config.Shots = {
+	Serve = { duration = 1.25, arc1 = 1.4, arc2 = 2.2, depth = 0.55 } :: ShotStyle,
+	Perfect = { duration = 0.8, arc1 = 1.1, arc2 = 1.4, depth = 0.75 } :: ShotStyle,
+	Good = { duration = 1.05, arc1 = 2.0, arc2 = 2.0, depth = 0.6 } :: ShotStyle,
+	Weak = { duration = 1.35, arc1 = 3.4, arc2 = 2.8, depth = 0.4 } :: ShotStyle,
+}
+
+-- Share of the flight spent before the bounce.
+Config.BounceFraction = 0.55
+
+-- Keep the ball this far inside the side lines when aiming.
+Config.AimMargin = 1
+
+-- Clearance the ball must keep over the net.
+Config.NetClearance = 0.4
+
+Config.Score = {
+	pointsToWinGame = 7,
+	deuceAt = 6, -- from 6-6, serve alternates every point and a game needs a 2-point lead
+	winBy = 2,
+	gamesToWinMatch = 2, -- best of 3
+	servesPerTurn = 2,
+}
+
+Config.Gauge = {
+	max = 10,
+	perReturn = 1,
+	perPerfect = 2,
+}
+
+-- Pause between a point ending and the next serve, and before the first serve of a game.
+Config.PointPause = 1.6
+Config.GamePause = 3
+
+-- A client's reported swing time is trusted only within this many seconds before the server got it.
+Config.MaxReportedLag = 0.35
+
+return Config
