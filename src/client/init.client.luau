@@ -380,6 +380,11 @@ local function specialFx(e: { [string]: any }, color: Color3)
 	elseif e.id == "Blink" then
 		local root = if e.player == me then myRoot() else nil
 		at = if root then Vector3.new(root.Position.X, o.Y + 0.2, root.Position.Z) else paddle
+	elseif e.id == "EMP" and e.target == me then
+		-- we are the one being jammed: static on screen and a flickering ball
+		local left = math.max((e.untilTime or now()) - now(), 0.5)
+		hud:glitch(left)
+		ball:flicker(now() + left)
 	end
 	Fx.special(ball.folder, camera, e.id, color, at, towards, seconds)
 end

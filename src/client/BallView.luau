@@ -33,6 +33,8 @@ export type BallView = typeof(setmetatable(
 		ghosts: { Part },
 		baseColor: Color3,
 		trails: { [number]: Color3? }, -- cosmetic trail colour by hitter side
+		flickerUntil: number?, -- EMP: the ball flickers on this screen until then
+		stallShown: Trajectory.Shot?, -- Quantum Stop: the shot whose stop was already marked
 	},
 	BallView
 ))
@@ -179,7 +181,7 @@ function BallView._style(self: BallView, shot: Trajectory.Shot)
 	local color = abilityColor(fx.ability) or cosmetic or Palette.Shot[shot.kind] or Color3.new(1, 1, 1)
 	self.baseColor = color
 	self.trail.Color = ColorSequence.new(color)
-	self.trail.Lifetime = if fx.smash then 0.35 else 0.22
+	self.trail.Lifetime = if fx.smash then 0.35 elseif fx.meteor then 0.5 else 0.22
 	self.light.Color = color
 	self.light.Brightness = if fx.ability then 5 else 2.5
 	self.ball.Color = color:Lerp(Color3.new(1, 1, 1), 0.6)
@@ -194,6 +196,11 @@ function BallView._style(self: BallView, shot: Trajectory.Shot)
 			gt.Enabled = fx.phantom == true
 		end
 	end
+end
+
+-- EMP hit this player: the ball flickers until then (its shadow on the table stays).
+function BallView.flicker(self: BallView, untilTime: number)
+	self.flickerUntil = untilTime
 end
 
 -- The point ended: let the ball fly on along its last direction and fade out.
@@ -336,6 +343,24 @@ function BallView.update(self: BallView, now: number, dt: number)
 		local hidden = shot.effects.blind == true and not self.bounced
 		self.ball.Transparency = if hidden then 1 else 0
 		self.trail.Enabled = not hidden
+		-- EMP: the ball flickers on a jammed screen
+		local jammed = self.flickerUntil ~= nil and now < (self.flickerUntil :: number)
+		if jammed and not hidden and math.random() < 0.35 then
+			self.ball.Transparency = 0.85
+			self.trail.Enabled = false
+		end
+		-- Quantum Stop: a burst of light where it stops, and a bright pulse while it hangs there
+		local st, se = shot.effects.stallStart, shot.effects.stallEnd
+		if st and se and now >= st and now < se then
+			self.light.Brightness = 6 + 4 * math.sin(now * 40)
+			if self.stallShown ~= shot then
+				self.stallShown = shot
+				self:ring(pos, self.baseColor, 5, Vector3.xAxis)
+				self:ring(pos, self.baseColor, 3, Vector3.yAxis)
+			end
+		elseif st and se and now >= se then
+			self.light.Brightness = 5
+		end
 		-- Time Slow: the ball turns blue while it is slowed
 		local fx = shot.effects
 		local slowed = fx.slowStart ~= nil and now >= (fx.slowStart :: number) and now < (fx.slowEnd :: number)

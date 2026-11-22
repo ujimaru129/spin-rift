@@ -1,5 +1,6 @@
 --!strict
--- The eight abilities from the spec. Players bring two into a match and spend Rift gauge to use them.
+-- The twelve abilities (eight from the spec, four added after launch). Players bring two into a
+-- match and spend Rift gauge to use them.
 --
 -- "shot" abilities are armed first and change the player's next return.
 -- "instant" abilities take effect as soon as they are used.
@@ -26,6 +27,10 @@ Abilities.Tuning = {
 	Barrier = { returnWindow = 2.3 }, -- the barrier's weak return is very easy to put away
 	GravityWell = { factor = 0.5, length = 4 },
 	Blink = { distance = 6 },
+	Zigzag = { amount = 1.6, waves = 3 }, -- sideways swing (studs) and number of half-waves
+	QuantumStop = { length = 0.4, factor = 0.05 }, -- stops over the net for `length` seconds
+	Meteor = { arc = 2.4, window = 0.9 }, -- a much higher first arc; harder to time
+	EMP = { length = 2.5, timingSd = 1.5 }, -- the opponent's screen is jammed (bots time worse)
 }
 
 local LIST: { Def } = {
@@ -108,6 +113,46 @@ local LIST: { Def } = {
 		rgb = { 125, 255, 154 },
 		effect = "動いている方向へ6スタッド瞬間移動する",
 		counter = "―",
+	},
+	{
+		id = "Zigzag",
+		name = "ジグザグショット",
+		role = "かく乱",
+		kind = "shot",
+		cost = 3,
+		rgb = { 255, 140, 40 },
+		effect = "次の返球が、左右にジグザグに揺れながら飛ぶ。着く場所は変わらない",
+		counter = "揺れが終わる最後の3分の1で位置を決める",
+	},
+	{
+		id = "QuantumStop",
+		name = "クォンタムストップ",
+		role = "かく乱",
+		kind = "shot",
+		cost = 4,
+		rgb = { 235, 235, 255 },
+		effect = "次の返球が、ネットの上で一瞬止まってから飛んでくる",
+		counter = "止まった分だけ打つのを遅らせる",
+	},
+	{
+		id = "Meteor",
+		name = "メテオドロップ",
+		role = "攻撃",
+		kind = "shot",
+		cost = 4,
+		rgb = { 255, 70, 50 },
+		effect = "次の返球が高く上がって急な角度で落ちる。打てる時間の幅が85%になる",
+		counter = "落ちてくる場所に早めに入る",
+	},
+	{
+		id = "EMP",
+		name = "EMPパルス",
+		role = "妨害",
+		kind = "instant",
+		cost = 3,
+		rgb = { 200, 255, 60 },
+		effect = "相手の画面に2.5秒間ノイズが走り、ボールがちらつく",
+		counter = "台に落ちる影を見る",
 	},
 }
 

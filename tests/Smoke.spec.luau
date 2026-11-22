@@ -185,6 +185,19 @@ return function(loader, expect)
 				hud:cutIn("スマッシュ", Hud.abilityColor("Smash"))
 				expect(hud.cutBand.Visible).toBe(true)
 				expect(hud.cutText.Text).toBe("スマッシュ")
+				-- EMP: static on screen for a while; the ball can be told to flicker
+				hud:glitch(0.5)
+				expect(hud.static.Visible).toBe(true)
+				globals.game:GetService("RunService").RenderStepped:Fire(1 / 60)
+				local view = BallView.new()
+				view:flicker(5)
+				expect(view.flickerUntil).toBe(5)
+				-- the picker has a chip for every ability
+				local chips = 0
+				for _ in hud.pickChips do
+					chips += 1
+				end
+				expect(chips).toBe(#Abilities.List)
 			end,
 		},
 		{

@@ -240,6 +240,25 @@ function Fx.special(
 		end
 	elseif id == "Blink" then
 		Fx.pillar(parent, at, color)
+	elseif id == "Zigzag" and towards then
+		Fx.lightning(parent, at, towards, color, 12)
+		Fx.lightning(parent, at, towards, Color3.new(1, 1, 1), 12)
+	elseif id == "QuantumStop" then
+		Fx.screenTint(camera, color, 0.35, true)
+		for k = 1, 2 do
+			later(0.1 * k, function()
+				Fx.shockwave(parent, at, color, 5 + 5 * k, 0.5)
+			end)
+		end
+	elseif id == "Meteor" then
+		Fx.burst(parent, at, Color3.fromRGB(255, 160, 40), 50, 40)
+		Fx.pillar(parent, at - Vector3.new(0, 3, 0), color)
+	elseif id == "EMP" then
+		for k = 1, 3 do
+			later(0.08 * k, function()
+				Fx.shockwave(parent, at, color, 6 + 6 * k, 0.35)
+			end)
+		end
 	end
 end
 

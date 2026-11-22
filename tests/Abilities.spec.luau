@@ -30,9 +30,9 @@ return function(loader, expect)
 
 	return {
 		{
-			"there are 8 abilities with the costs from the spec",
+			"there are 12 abilities with the costs from the spec (and the four added after launch)",
 			function()
-				expect(#Abilities.List).toBe(8)
+				expect(#Abilities.List).toBe(12)
 				local costs = {}
 				for _, d in Abilities.List do
 					costs[d.id] = d.cost
@@ -45,6 +45,10 @@ return function(loader, expect)
 				expect(costs.Barrier).toBe(8) -- spec said 6; raised in balance tuning
 				expect(costs.GravityWell).toBe(3) -- spec said 4; lowered in balance tuning
 				expect(costs.Blink).toBe(2)
+				expect(costs.Zigzag).toBe(3)
+				expect(costs.QuantumStop).toBe(4)
+				expect(costs.Meteor).toBe(4)
+				expect(costs.EMP).toBe(3)
 			end,
 		},
 		{
@@ -200,6 +204,93 @@ return function(loader, expect)
 				local events = returnBall(m, 0, 3)
 				expect(find(events, "Ability").state).toBe("fired")
 				expect(find(events, "Shot").shot.effects.ability).toBe("Curve")
+			end,
+		},
+		{
+			"Zigzag swings left and right in flight but still arrives where it was aimed, bouncing on the table",
+			function()
+				local from = Vector3.new(Config.HitX, Config.HitY, 0)
+				local plain = Trajectory.plan(from, 1, 2, "Good", 0)
+				local zig = Trajectory.plan(from, 1, 2, "Good", 0, "Zigzag")
+				expect(zig.effects.zigzag ~= nil).toBeTruthy()
+				expect(math.abs(Trajectory.positionAtProgress(zig, 1).Z - plain.to.Z) < 1e-6).toBeTruthy()
+				local swung = 0
+				for k = 1, 9 do
+					local s = k / 10
+					swung = math.max(
+						swung,
+						math.abs(Trajectory.positionAtProgress(zig, s).Z - Trajectory.positionAtProgress(plain, s).Z)
+					)
+				end
+				expect(swung > 0.5).toBeTruthy()
+				expect(math.abs(Trajectory.bouncePoint(zig).Z) <= Config.Table.halfWidth).toBeTruthy()
+				expect(Trajectory.arrivalTime(zig)).toBe(Trajectory.arrivalTime(plain))
+			end,
+		},
+		{
+			"Quantum Stop holds the ball over the net, then it flies on and arrives later by the stop",
+			function()
+				local from = Vector3.new(Config.HitX, Config.HitY, 0)
+				local plain = Trajectory.plan(from, 1, 0, "Good", 0)
+				local stop = Trajectory.plan(from, 1, 0, "Good", 0, "QuantumStop")
+				local t = Abilities.Tuning.QuantumStop
+				local a, b = stop.effects.stallStart :: number, stop.effects.stallEnd :: number
+				expect(b - a).toBe(t.length)
+				-- almost still during the stop, near the net
+				local p1, p2 = Trajectory.positionAt(stop, a + 0.01), Trajectory.positionAt(stop, b - 0.01)
+				expect((p2 - p1).Magnitude < 0.6).toBeTruthy()
+				expect(math.abs(p1.X) < 1.5).toBeTruthy()
+				local late = Trajectory.arrivalTime(stop) - Trajectory.arrivalTime(plain)
+				expect(math.abs(late - t.length * (1 - t.factor)) < 1e-6).toBeTruthy()
+				-- a Time Slow on it starts after the stop, never on top of it
+				local slowed = Trajectory.withSlow(stop, a, 2, 0.5)
+				expect(slowed.effects.slowStart).toBe(b)
+				expect(Trajectory.arrivalTime(slowed) > Trajectory.arrivalTime(stop)).toBeTruthy()
+				expect(math.abs(Trajectory.progressAt(slowed, Trajectory.arrivalTime(slowed)) - 1) < 1e-6).toBeTruthy()
+			end,
+		},
+		{
+			"Meteor Drop goes much higher, still clears the net, and narrows the timing window",
+			function()
+				local from = Vector3.new(Config.HitX, Config.HitY, 0)
+				local plain = Trajectory.plan(from, 1, 0, "Good", 0)
+				local met = Trajectory.plan(from, 1, 0, "Good", 0, "Meteor")
+				expect(met.arc1 > plain.arc1 * 2).toBeTruthy()
+				expect(Trajectory.heightOverNet(met) > Trajectory.heightOverNet(plain)).toBeTruthy()
+				expect(Trajectory.windowScale(met)).toBe(Abilities.Tuning.Meteor.window)
+			end,
+		},
+		{
+			"EMP jams the opponent for a while and costs 3 gauge; a jammed bot times balls worse",
+			function()
+				local m = rallyWith({}, { "EMP" })
+				local t = m.shot.startTime + 0.1
+				local events = m:useAbility(2, 1, t)
+				local used = find(events, "Ability")
+				expect(used.state).toBe("used")
+				expect(used.target).toBe(1)
+				expect(used.untilTime).toBe(t + Abilities.Tuning.EMP.length)
+				expect(m.gauge[2]).toBe(Config.Gauge.max - 3)
+				-- the same ball, read by a calm bot and a jammed one: the jammed one is further off
+				local Bot = Rally.Bot
+				local shot = Trajectory.plan(Vector3.new(Config.HitX, Config.HitY, 0), 1, 0, "Good", 10)
+				local function spread(jam)
+					local total, n = 0, 0
+					for seed = 1, 200 do
+						local r = Sim.rng(seed * 7919 + 104729) -- small seeds start with tiny numbers
+						local b = Bot.new("Normal", -1, r, {})
+						if jam then
+							b:jam(100)
+						end
+						b:watch(shot)
+						if b.swingAt then
+							total += math.abs(b.swingAt - Trajectory.arrivalTime(shot))
+							n += 1
+						end
+					end
+					return total / math.max(n, 1)
+				end
+				expect(spread(true) > spread(false)).toBeTruthy()
 			end,
 		},
 		{

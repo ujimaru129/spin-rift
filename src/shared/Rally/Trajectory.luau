@@ -21,6 +21,11 @@ export type Effects = {
 	slowStart: number?, -- server time the Time Slow window starts
 	slowEnd: number?,
 	slowFactor: number?,
+	zigzag: number?, -- Zigzag: sideways swing in studs (it still arrives where it was aimed)
+	stallStart: number?, -- Quantum Stop: server time the ball stops over the net
+	stallEnd: number?,
+	stallFactor: number?,
+	meteor: boolean?, -- Meteor Drop: a much higher first arc, narrower timing windows
 	wind: number?, -- Sakura Float: sideways drift in studs, already included in `to`
 }
 
@@ -54,6 +59,10 @@ local function curveOffset(shot: Shot, s: number): number
 	local c = shot.effects.curve
 	local w = shot.effects.wind
 	local z = if c then c * math.sin(math.pi * s) else 0
+	local zz = shot.effects.zigzag
+	if zz then
+		z += zz * math.sin(math.pi * Abilities.Tuning.Zigzag.waves * s)
+	end
 	if w then
 		-- the ball leaves aimed where the player pointed and drifts more and more with the wind
 		z -= w * s * (1 - s)
@@ -94,6 +103,9 @@ function Trajectory.plan(
 		effects.phantom = true
 	elseif ability == "Blind" then
 		effects.blind = true
+	elseif ability == "Meteor" then
+		arc1 *= Abilities.Tuning.Meteor.arc
+		effects.meteor = true
 	end
 
 	local shot: Shot = {
@@ -123,6 +135,25 @@ function Trajectory.plan(
 		effects.curve = sign * amount
 	end
 
+	if ability == "Zigzag" then
+		-- swing left and right; shrink the swing if the bounce would leave the table
+		local amount = Abilities.Tuning.Zigzag.amount
+		local edge = Config.Table.halfWidth - 0.4
+		local at = math.sin(math.pi * Abilities.Tuning.Zigzag.waves * fraction)
+		while amount > 0.2 and math.abs(bounceZ + amount * at) > edge do
+			amount *= 0.8
+		end
+		effects.zigzag = amount
+	elseif ability == "QuantumStop" then
+		-- stop where the ball crosses the net
+		local u = (0 - from.X) / (bounceX - from.X)
+		local t = Abilities.Tuning.QuantumStop
+		local at = startTime + duration * fraction * u
+		effects.stallStart = at
+		effects.stallEnd = at + t.length
+		effects.stallFactor = t.factor
+	end
+
 	-- Raise the first arc until the ball clears the net.
 	local needed = Config.Table.surfaceY + Config.Table.netHeight + Config.Ball.radius + Config.NetClearance
 	local over = Trajectory.heightOverNet(shot)
@@ -137,39 +168,68 @@ end
 function Trajectory.withSlow(shot: Shot, startAt: number, length: number, factor: number): Shot
 	local copy = table.clone(shot)
 	copy.effects = table.clone(shot.effects)
+	local s0, s1 = shot.effects.stallStart, shot.effects.stallEnd
+	if s0 and s1 and startAt < s1 and startAt + length > s0 then
+		-- a Quantum Stop is already holding the ball: slow it down after the stop instead
+		startAt = s1
+	end
 	copy.effects.slowStart = startAt
 	copy.effects.slowEnd = startAt + length
 	copy.effects.slowFactor = factor
 	return copy
 end
 
--- Seconds of flight "used up" by server time t, after any slow-down.
+-- The stretches of flight that run slower than normal, in time order: { start, end, factor }.
+-- Quantum Stop (almost stopped) and Time Slow (half speed); they never overlap.
+local function windows(shot: Shot): { { number } }
+	local fx = shot.effects
+	local list = {}
+	if fx.stallStart and fx.stallEnd and fx.stallFactor then
+		table.insert(list, { fx.stallStart, fx.stallEnd, fx.stallFactor })
+	end
+	if fx.slowStart and fx.slowEnd and fx.slowFactor then
+		table.insert(list, { fx.slowStart, fx.slowEnd, fx.slowFactor })
+	end
+	table.sort(list, function(x, y)
+		return x[1] < y[1]
+	end)
+	return list
+end
+
+-- Seconds of flight "used up" by server time t, after any slow-downs.
 local function flightTimeAt(shot: Shot, t: number): number
 	local elapsed = t - shot.startTime
-	local fx = shot.effects
-	local a, b, f = fx.slowStart, fx.slowEnd, fx.slowFactor
-	if a and b and f then
-		local inside = math.clamp(t, a, b) - a
-		elapsed -= inside * (1 - f)
+	for _, w in windows(shot) do
+		local inside = math.clamp(t, w[1], w[2]) - w[1]
+		elapsed -= inside * (1 - w[3])
 	end
 	return elapsed
 end
 
 -- Server time at which the ball has used up `flight` seconds of its flight.
 local function timeForFlight(shot: Shot, flight: number): number
-	local fx = shot.effects
-	local a, b, f = fx.slowStart, fx.slowEnd, fx.slowFactor
-	local plain = shot.startTime + flight
-	if not (a and b and f) or plain <= a then
-		return plain
+	local t = shot.startTime
+	local left = flight
+	for _, w in windows(shot) do
+		local a, b, f = w[1], w[2], w[3]
+		if a > t then
+			local free = a - t
+			if left <= free then
+				return t + left
+			end
+			left -= free
+			t = a
+		end
+		local slowFlight = (b - math.max(a, t)) * f
+		if slowFlight > 0 then
+			if left <= slowFlight then
+				return t + left / f
+			end
+			left -= slowFlight
+			t = b
+		end
 	end
-	local beforeSlow = a - shot.startTime
-	local left = flight - beforeSlow
-	local slowFlight = (b - a) * f
-	if left <= slowFlight then
-		return a + left / f
-	end
-	return b + (left - slowFlight)
+	return t + left
 end
 
 -- Position along the path for progress s in [0, 1].
@@ -222,6 +282,8 @@ function Trajectory.windowScale(shot: Shot): number
 	local k = 1
 	if fx.smash then
 		k = Abilities.Tuning.Smash.window
+	elseif fx.meteor then
+		k = Abilities.Tuning.Meteor.window
 	elseif fx.ability == "BarrierReturn" then
 		k = Abilities.Tuning.Barrier.returnWindow
 	elseif shot.kind == "Weak" then

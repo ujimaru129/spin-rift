@@ -25,6 +25,9 @@ local CONFUSION = {
 	phantomMiss = 0.015,
 	phantomSd = 1.05,
 	blindSd = 1.5,
+	zigzagSd = 1.45, -- the swing makes the arrival hard to read early
+	stallSd = 1.9, -- the stop throws the timing off
+	meteorSd = 1.15,
 }
 
 local Bot = {}
@@ -101,6 +104,7 @@ export type Bot = typeof(setmetatable(
 		eager: boolean, -- rolled once per shot: willing to spend gauge on a tight ball
 		slowUntil: number,
 		slowFactor: number,
+		jammedUntil: number?, -- EMP
 	},
 	Bot
 ))
@@ -166,6 +170,18 @@ function Bot.watch(self: Bot, shot: Trajectory.Shot?)
 		if fx.blind then
 			sd *= CONFUSION.blindSd
 		end
+		if fx.zigzag then
+			sd *= CONFUSION.zigzagSd
+		end
+		if fx.stallStart then
+			sd *= CONFUSION.stallSd
+		end
+		if fx.meteor then
+			sd *= CONFUSION.meteorSd
+		end
+		if self.jammedUntil and shot.startTime < self.jammedUntil then
+			sd *= Abilities.Tuning.EMP.timingSd
+		end
 	end
 	if self.random(0, 1) < miss then
 		return
@@ -175,6 +191,11 @@ function Bot.watch(self: Bot, shot: Trajectory.Shot?)
 end
 
 -- Gravity Well on the bot.
+-- EMP: the bot's "screen" is jammed until then, so it times balls worse.
+function Bot.jam(self: Bot, untilTime: number)
+	self.jammedUntil = untilTime
+end
+
 function Bot.slow(self: Bot, untilTime: number, factor: number)
 	self.slowUntil = untilTime
 	self.slowFactor = factor
@@ -246,7 +267,7 @@ function Bot.think(self: Bot, s: Situation): (number?, number?)
 				if s.receiving and not s.barrier and ((danger and roll < chance) or not canReach(self, s.now)) then
 					return slot, nil
 				end
-			elseif id == "GravityWell" then
+			elseif id == "GravityWell" or id == "EMP" then
 				if not s.receiving and s.shot and roll < chance then
 					return slot, nil
 				end

@@ -305,6 +305,11 @@ function Match.useAbility(self: Match, index: number, slot: number, now: number,
 		used.target = target
 		used.untilTime = now + t.length
 		used.factor = t.factor
+	elseif id == "EMP" then
+		-- jams the opponent's screen (clients draw it; bots time worse)
+		local target = Match.other(index)
+		used.target = target
+		used.untilTime = now + Abilities.Tuning.EMP.length
 	elseif id == "Blink" then
 		local d = dirZ or 0
 		used.dirZ = if d > 0 then 1 elseif d < 0 then -1 else 0

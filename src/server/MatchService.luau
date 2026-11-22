@@ -146,6 +146,13 @@ local function applyAbility(session: Session, e: Match.Event)
 	if e.state ~= "used" then
 		return
 	end
+	if e.id == "EMP" then
+		local target = session.seats[e.target]
+		if target.bot then
+			target.bot:jam(e.untilTime)
+		end
+		return
+	end
 	if e.id == "GravityWell" then
 		local target = session.seats[e.target]
 		if target.bot then

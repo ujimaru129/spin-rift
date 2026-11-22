@@ -87,7 +87,7 @@
 ```
 能力ありの卓球で、世界中のプレイヤーと1対1の真剣勝負！
 
-■ 8種類の特殊能力から2つ選んで戦う
+■ 12種類の特殊能力から2つ選んで戦う
 カーブ、3つに分身する球、透明な球、時間を遅くする…読み合いで勝て！
 
 ■ 世界中とランク戦
@@ -104,7 +104,7 @@ PC・スマホ・タブレット・ゲーム機に対応。はじめての人は
 ```
 1v1 table tennis battles with special abilities, against players from all over the world!
 
-■ Pick 2 of 8 special abilities
+■ Pick 2 of 12 special abilities
 Curve shots, balls that split into three, invisible bounces, slowing time… outsmart your opponent!
 
 ■ Ranked play worldwide
@@ -121,7 +121,7 @@ Play on PC, mobile, tablet and console. New? Start with the 1-minute tutorial!
 ```
 ¡Duelos 1 contra 1 de tenis de mesa con habilidades especiales, contra jugadores de todo el mundo!
 
-■ Elige 2 de 8 habilidades especiales
+■ Elige 2 de 12 habilidades especiales
 Tiros con efecto, pelotas que se dividen en tres, botes invisibles, tiempo lento… ¡supera a tu rival!
 
 ■ Clasificatoria mundial
@@ -138,7 +138,7 @@ Para PC, móvil, tableta y consola. ¿Eres nuevo? ¡Empieza con el tutorial de 1
 ```
 Duelos 1 contra 1 de tênis de mesa com habilidades especiais, contra jogadores do mundo todo!
 
-■ Escolha 2 de 8 habilidades especiais
+■ Escolha 2 de 12 habilidades especiais
 Tiros com efeito, bolas que viram três, quiques invisíveis, tempo lento… engane seu oponente!
 
 ■ Ranqueada mundial
@@ -155,7 +155,7 @@ Para PC, celular, tablet e console. Novo por aqui? Comece pelo tutorial de 1 min
 ```
 특수 능력이 있는 탁구로 전 세계 플레이어와 1대1 진검승부!
 
-■ 8가지 특수 능력 중 2개를 골라 싸우자
+■ 12가지 특수 능력 중 2개를 골라 싸우자
 휘는 공, 3개로 분신하는 공, 투명한 공, 시간을 느리게 하는 능력… 수 싸움에서 이겨라!
 
 ■ 전 세계 랭크전
@@ -172,7 +172,7 @@ PC·모바일·태블릿·콘솔 지원. 처음이라면 1분 튜토리얼부터
 ```
 Duel tenis meja 1 lawan 1 dengan kemampuan spesial, melawan pemain dari seluruh dunia!
 
-■ Pilih 2 dari 8 kemampuan spesial
+■ Pilih 2 dari 12 kemampuan spesial
 Pukulan melengkung, bola yang terbelah tiga, pantulan tak terlihat, waktu melambat… kalahkan lawanmu dengan strategi!
 
 ■ Mode peringkat sedunia

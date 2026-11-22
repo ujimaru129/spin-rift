@@ -88,6 +88,8 @@ return function(loader)
 					used[key] = (used[key] or 0) + 1
 					if e.id == "GravityWell" then
 						bots[e.target]:slow(e.untilTime, e.factor)
+					elseif e.id == "EMP" then
+						bots[e.target]:jam(e.untilTime)
 					elseif e.id == "Blink" then
 						bots[e.player]:blink(e.dirZ, e.distance)
 					end

@@ -1217,6 +1217,114 @@ local ABILITY: { [string]: { [string]: AbilityText } } = {
 		ko = { name = "블링크", role = "이동", effect = "움직이는 방향으로 6스터드 순간이동" },
 		id = { name = "Kedip", role = "Gerak", effect = "Teleportasi 6 stud ke arah gerakmu" },
 	},
+	Zigzag = {
+		en = {
+			name = "Zigzag Shot",
+			role = "Trick",
+			effect = "Your next return zigzags left and right in flight; it still lands where you aimed",
+		},
+		es = {
+			name = "Tiro zigzag",
+			role = "Engaño",
+			effect = "Tu próxima devolución zigzaguea en el aire; llega a donde apuntaste",
+		},
+		pt = {
+			name = "Tiro zigue-zague",
+			role = "Truque",
+			effect = "Sua próxima rebatida faz zigue-zague no ar; chega onde você mirou",
+		},
+		ko = {
+			name = "지그재그 샷",
+			role = "교란",
+			effect = "다음 리턴이 좌우로 지그재그로 흔들리며 날아간다. 도착 지점은 같다",
+		},
+		id = {
+			name = "Pukulan Zigzag",
+			role = "Tipuan",
+			effect = "Pukulan berikutnya berzigzag di udara; tetap mendarat di tempat yang kamu tuju",
+		},
+	},
+	QuantumStop = {
+		en = {
+			name = "Quantum Stop",
+			role = "Trick",
+			effect = "Your next return freezes for a moment over the net, then flies on",
+		},
+		es = {
+			name = "Parada cuántica",
+			role = "Engaño",
+			effect = "Tu próxima devolución se congela un instante sobre la red y luego sigue",
+		},
+		pt = {
+			name = "Parada quântica",
+			role = "Truque",
+			effect = "Sua próxima rebatida congela um instante sobre a rede e depois segue",
+		},
+		ko = {
+			name = "퀀텀 스톱",
+			role = "교란",
+			effect = "다음 리턴이 네트 위에서 잠깐 멈췄다가 다시 날아간다",
+		},
+		id = {
+			name = "Henti Kuantum",
+			role = "Tipuan",
+			effect = "Pukulan berikutnya berhenti sesaat di atas net, lalu melaju lagi",
+		},
+	},
+	Meteor = {
+		en = {
+			name = "Meteor Drop",
+			role = "Attack",
+			effect = "Your next return flies high and drops steeply; the timing window shrinks to 85%",
+		},
+		es = {
+			name = "Caída meteoro",
+			role = "Ataque",
+			effect = "Tu próxima devolución sube alto y cae en picada; la ventana de tiempo baja al 85%",
+		},
+		pt = {
+			name = "Queda meteoro",
+			role = "Ataque",
+			effect = "Sua próxima rebatida sobe alto e cai em queda íngreme; a janela de tempo cai para 85%",
+		},
+		ko = {
+			name = "메테오 드롭",
+			role = "공격",
+			effect = "다음 리턴이 높이 솟았다가 가파르게 떨어진다. 타이밍 폭이 85%가 된다",
+		},
+		id = {
+			name = "Jatuhan Meteor",
+			role = "Serang",
+			effect = "Pukulan berikutnya melambung tinggi dan jatuh curam; jendela waktu jadi 85%",
+		},
+	},
+	EMP = {
+		en = {
+			name = "EMP Pulse",
+			role = "Hinder",
+			effect = "Static fills your opponent's screen for 2.5 s and the ball flickers",
+		},
+		es = {
+			name = "Pulso EMP",
+			role = "Control",
+			effect = "La pantalla de tu rival se llena de estática 2,5 s y la pelota parpadea",
+		},
+		pt = {
+			name = "Pulso EMP",
+			role = "Controle",
+			effect = "A tela do oponente fica com estática por 2,5 s e a bola pisca",
+		},
+		ko = {
+			name = "EMP 펄스",
+			role = "방해",
+			effect = "상대 화면에 2.5초간 노이즈가 생기고 공이 깜빡인다",
+		},
+		id = {
+			name = "Denyut EMP",
+			role = "Hambat",
+			effect = "Layar lawan penuh gangguan selama 2,5 dtk dan bola berkedip",
+		},
+	},
 }
 
 -- Cosmetic item names (titles are shown as-is next to the player's name).

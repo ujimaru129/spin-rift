@@ -3,6 +3,7 @@
 -- the match HUD (scoreboard, gauge, ability slots, timing popups, tutorial line) and results.
 -- Every word comes from Strings, so the whole UI can switch between Japanese and English.
 
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -113,6 +114,8 @@ export type Hud = typeof(setmetatable(
 		tutorial: TextLabel,
 		announce: TextLabel,
 		flash: Frame,
+		static: Frame,
+		glitchUntil: number?,
 		cutBand: Frame,
 		cutText: TextLabel,
 		slots: { Slot },
@@ -355,7 +358,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	end
 
 	bind(label(menu, "", 14, INK, FONT), "menu.pick").TextXAlignment = Enum.TextXAlignment.Left
-	local picks = grid(menu, 4)
+	local picks = grid(menu, math.ceil(#Abilities.List / 2)) -- two per row
 	local pickInfo = label(menu, "", 12, INK_DIM, FONT_REGULAR)
 	pickInfo.Size = UDim2.new(1, 0, 0, 34)
 	pickInfo.TextXAlignment = Enum.TextXAlignment.Left
@@ -849,6 +852,25 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	cutStroke.Transparency = 0.2
 	cutStroke.Parent = cutText
 
+	-- EMP static (see Hud.glitch)
+	local static = Instance.new("Frame")
+	static.Name = "Static"
+	static.BorderSizePixel = 0
+	static.BackgroundColor3 = Color3.fromRGB(40, 50, 40)
+	static.BackgroundTransparency = 0.85
+	static.Size = UDim2.fromScale(1, 1)
+	static.ZIndex = 19
+	static.Visible = false
+	static.Parent = gui
+	for i = 1, 10 do
+		local bar = Instance.new("Frame")
+		bar.Name = "Bar" .. i
+		bar.BorderSizePixel = 0
+		bar.BackgroundColor3 = if i % 3 == 0 then Color3.fromRGB(200, 255, 60) else Color3.new(1, 1, 1)
+		bar.ZIndex = 19
+		bar.Parent = static
+	end
+
 	gui.Parent = playerGui
 
 	local self = setmetatable({
@@ -898,6 +920,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		tutorial = tutorial,
 		announce = announce,
 		flash = flash,
+		static = static,
 		cutBand = cutIn,
 		cutText = cutText,
 		slots = slots,
@@ -1353,6 +1376,34 @@ function Hud.announceAbility(self: Hud, text: string, color: Color3)
 	self.announce.TextTransparency = 0
 	local info = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.7)
 	TweenService:Create(self.announce, info, { TextTransparency = 1 }):Play()
+end
+
+-- EMP: static over the whole screen for `seconds` (thin noise bars that jump around, and a
+-- flickering grey veil). Only looks; the ball and its shadow keep being drawn underneath.
+function Hud.glitch(self: Hud, seconds: number)
+	local layer = self.static
+	layer.Visible = true
+	local bars = layer:GetChildren()
+	local untilTime = os.clock() + seconds
+	self.glitchUntil = untilTime
+	local conn: RBXScriptConnection? = nil
+	conn = RunService.RenderStepped:Connect(function()
+		if os.clock() >= (self.glitchUntil or 0) then
+			layer.Visible = false
+			if conn then
+				conn:Disconnect()
+			end
+			return
+		end
+		layer.BackgroundTransparency = 0.75 + math.random() * 0.2
+		for _, bar in bars do
+			if bar:IsA("Frame") then
+				bar.Position = UDim2.fromScale(math.random() * 0.3 - 0.15, math.random())
+				bar.Size = UDim2.new(1.3, 0, 0, math.random(2, 14))
+				bar.BackgroundTransparency = 0.3 + math.random() * 0.5
+			end
+		end
+	end)
 end
 
 -- A special move fires: white flash, then the move's name sweeps across the screen on a band
