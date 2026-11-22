@@ -22,6 +22,8 @@ local requestRemote = Net.get(Net.REQUEST_MATCH)
 local leaveRemote = Net.get(Net.LEAVE_MATCH)
 local swingRemote = Net.get(Net.SWING)
 local abilityRemote = Net.get(Net.USE_ABILITY)
+local helloRemote = Net.get(Net.HELLO)
+local leaderboardRemote = Net.get(Net.REQUEST_LEADERBOARD)
 local matchEvent = Net.get(Net.MATCH_EVENT)
 
 local ball = BallView.new()
@@ -123,6 +125,9 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 	end,
 	onSwingButton = swing,
 	onAbility = useAbility,
+	onLeaderboard = function(scope: string)
+		leaderboardRemote:FireServer(scope)
+	end,
 })
 hud:showMenu()
 
@@ -274,7 +279,50 @@ end
 local function onEvent(e: { [string]: any })
 	local kind = e.kind
 	if kind == "Queued" then
-		hud:showWaiting()
+		hud:setMenuNote("")
+		if e.ranked then
+			hud:showWaiting({
+				title = "ランク戦の相手を探しています…",
+				sub = "近いレートの相手を探しています",
+			})
+		else
+			hud:showWaiting()
+		end
+	elseif kind == "RankQueue" then
+		hud:showWaiting({
+			title = "ランク戦の相手を探しています…",
+			sub = `{math.floor(e.waited)}秒  {e.search}`,
+			bot = e.botOffer,
+		})
+	elseif kind == "Teleporting" then
+		hud:showWaiting({ title = "対戦部屋へ移動しています…", cancel = false })
+	elseif kind == "RoomWaiting" then
+		hud:showWaiting({
+			title = "相手の到着を待っています…",
+			sub = "ランク戦の部屋です",
+			cancel = false,
+		})
+	elseif kind == "RankDenied" then
+		hud:showMenu()
+		hud:setMenuNote(
+			if e.reason == "banned"
+				then "試合を途中で抜けた回数が多いため、しばらくランク戦に参加できません"
+				else "今はランク戦に参加できません"
+		)
+	elseif kind == "RankCancelled" then
+		endMatchView()
+		hud:showMenu()
+		hud:setMenuNote(
+			if e.reason == "noshow"
+				then "相手が来なかったため、試合は中止になりました（レートは変わりません）"
+				else "ランク戦の部屋に移動できませんでした。もう一度お試しください"
+		)
+	elseif kind == "Profile" then
+		hud:setProfile(e)
+	elseif kind == "Leaderboard" then
+		hud:showLeaderboard(e.scope, e.rows)
+	elseif kind == "RankResult" then
+		hud:setRankResult(e)
 	elseif kind == "Start" then
 		me = e.you
 		mySide = e.side
@@ -382,15 +430,16 @@ player.CharacterAdded:Connect(function()
 end)
 
 -- Round-trip time shown in the corner, including any debug delay set in Studio.
-task.spawn(function()
-	while true do
-		if origin then
-			local debugMs = ReplicatedStorage:GetAttribute(Net.DEBUG_LAG_ATTRIBUTE)
-			local extra = if type(debugMs) == "number" then debugMs else 0
-			hud:setPing(player:GetNetworkPing() * 1000 + extra)
-		end
-		task.wait(1)
+local pingClock = 0
+RunService.Heartbeat:Connect(function(dt)
+	pingClock += dt
+	if pingClock < 1 or not origin then
+		return
 	end
+	pingClock = 0
+	local debugMs = ReplicatedStorage:GetAttribute(Net.DEBUG_LAG_ATTRIBUTE)
+	local extra = if type(debugMs) == "number" then debugMs else 0
+	hud:setPing(player:GetNetworkPing() * 1000 + extra)
 end)
 
 -- Broadcast-style camera behind our own side, following us a little across the table.
@@ -413,3 +462,6 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	camera.CFrame = cf
 end)
+
+-- Ready: ask the server for our rank and anything else it needs to tell us.
+helloRemote:FireServer()

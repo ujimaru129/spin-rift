@@ -1,4 +1,4 @@
-# SPIN RIFT
+# SUPER BATTLE PING-PONG!!
 
 能力ありの卓球で1対1の真剣勝負をする、Robloxのオンライン対戦ゲーム。
 
@@ -6,7 +6,8 @@
 - コンセプトアート（3D）：[SPIN RIFT Concept Art](https://claude.ai/artifact/DBQq2aiGqVfSjMVeBLv6Ac)
 - [フェーズ1 手触りの試作](docs/phase1.md)
 - [フェーズ2 オンライン対戦](docs/phase2.md)
-- いまのフェーズ：[フェーズ3 特殊能力](docs/phase3.md)
+- [フェーズ3 特殊能力](docs/phase3.md)
+- いまのフェーズ：[フェーズ4 ランク戦とマッチング](docs/phase4.md)
 
 ## 開発環境のセットアップ
 
@@ -50,8 +51,8 @@ VS Code を使う場合は `.vscode/extensions.json` の推奨拡張（Rojo、lu
 
 | フォルダ | Roblox上の場所 | 内容 |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | サーバー・クライアント共通。`Rally` がゲームのルール |
-| `src/server` | `ServerScriptService.Server` | 試合の進行と待ち行列（`MatchService`）、アリーナの組み立て（`Arena`） |
+| `src/shared` | `ReplicatedStorage.Shared` | サーバー・クライアント共通。`Rally` が試合のルール、`Rank` がレートとマッチングのルール |
+| `src/server` | `ServerScriptService.Server` | 試合の進行（`MatchService`）、アリーナ（`Arena`）、ランク戦（`RankedQueue`・`RankedRoom`・`RankedResult`）、成績の保存（`PlayerData`）、ランキング（`Leaderboard`） |
 | `src/client` | `StarterPlayer.StarterPlayerScripts.Client` | 操作、カメラ、ボールの描画（`BallView`）、画面のUI（`Hud`） |
 
 ファイル名の規則（Rojo）: `*.server.luau` = Script、`*.client.luau` = LocalScript、`*.luau` = ModuleScript。

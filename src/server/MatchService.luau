@@ -18,9 +18,18 @@ local Bot = require(RallyFolder:WaitForChild("Bot"))
 local Abilities = require(RallyFolder:WaitForChild("Abilities"))
 local Net = require(Shared:WaitForChild("Net"))
 local Palette = require(Shared:WaitForChild("Palette"))
+local Rank = Shared:WaitForChild("Rank")
+local Rating = require(Rank:WaitForChild("Rating"))
+local Regions = require(Rank:WaitForChild("Regions"))
 local Arena = require(script.Parent.Arena)
+local PlayerData = require(script.Parent.PlayerData)
+local Leaderboard = require(script.Parent.Leaderboard)
+local RankedQueue = require(script.Parent.RankedQueue)
+local RankedResult = require(script.Parent.RankedResult)
+local RankedRoom = require(script.Parent.RankedRoom)
 
-local ONLINE = "Online"
+local ONLINE = "Online" -- casual match with someone in this server
+local RANKED = "Ranked"
 local ARENA_SPACING = 400 -- studs between arenas
 local AUTO_SERVE_AFTER = 5 -- seconds a player may wait before their serve goes in automatically
 local MIN_SWING_GAP = 0.15 -- ignore button mashing faster than this
@@ -44,6 +53,7 @@ type Session = {
 	arena: Model,
 	match: Match.Match,
 	seats: { Seat },
+	onOver: ((winner: number, reason: string?) -> ())?,
 }
 
 local MatchService = {}
@@ -173,6 +183,11 @@ local function dispatch(session: Session, events: { Match.Event })
 			pointEnded = true
 		end
 		send(session, e)
+		if e.kind == "MatchOver" and session.onOver then
+			local cb = session.onOver
+			session.onOver = nil
+			task.spawn(cb, e.winner, e.reason)
+		end
 	end
 	local m = session.match
 	if pointEnded and m.phase == "Paused" then
@@ -210,7 +225,12 @@ local function seatName(seat: Seat, mode: string): string
 	return if mode == "Wall" then "WALL" else "BOT（" .. (Bot.Profiles :: any)[mode].label .. "）"
 end
 
-local function begin(mode: string, seats: { Seat }, firstServer: number)
+local function begin(
+	mode: string,
+	seats: { Seat },
+	firstServer: number,
+	onOver: ((winner: number, reason: string?) -> ())?
+)
 	local slot = freeSlot()
 	local origin = Vector3.new(slot * ARENA_SPACING, 200, 0)
 	local session: Session = {
@@ -220,6 +240,7 @@ local function begin(mode: string, seats: { Seat }, firstServer: number)
 		arena = Arena.build(origin, slot),
 		match = Match.new(now(), firstServer, { seats[1].loadout, seats[2].loadout }),
 		seats = seats,
+		onOver = onOver,
 	}
 	sessions[session] = true
 	for _, seat in seats do
@@ -242,6 +263,7 @@ local function begin(mode: string, seats: { Seat }, firstServer: number)
 				origin = origin,
 				loadout = seat.loadout,
 				opponentLoadout = other.loadout,
+				ranked = mode == RANKED,
 			})
 		end
 	end
@@ -299,9 +321,59 @@ local function tryPair()
 	end
 end
 
--- Takes a player out of whatever they are in. In an unfinished online match the other player wins.
+-- A ranked match between two players in this server. onOver gets the winner (1 or 2) and the
+-- reason ("forfeit" if someone left).
+function MatchService.startRanked(players: { Player }, loadouts: { { string } }, onOver: (number, string?) -> ())
+	for _, p in players do
+		RankedQueue.leave(p)
+		removeFromQueue(p)
+	end
+	begin(RANKED, {
+		humanSeat(1, players[1], Abilities.sanitize(loadouts[1])),
+		humanSeat(2, players[2], Abilities.sanitize(loadouts[2])),
+	}, math.random(1, 2), onOver)
+end
+
+local function sendProfile(player: Player)
+	local data = PlayerData.get(player.UserId)
+	local region = RankedQueue.regionOf(player)
+	local tier = Rating.tier(data.rating)
+	local legend = data.rating >= 1750 and Leaderboard.isLegend(player.UserId, region)
+	fire(player, {
+		kind = "Profile",
+		rating = data.rating,
+		tier = if legend then Rating.legend().label else tier.label,
+		tierId = if legend then "Legend" else tier.id,
+		games = data.games,
+		wins = data.wins,
+		losses = data.losses,
+		region = region,
+		regionName = Regions.Names[region],
+		placement = math.max(0, Rating.PLACEMENT_GAMES - data.games),
+	})
+end
+
+-- Two players in this server were paired for ranked (Studio, or a server without teleports).
+local function startLocalRanked(players: { Player }, entries: { any })
+	local sides = {}
+	for _, e in entries do
+		table.insert(sides, { userId = e.userId, rating = e.rating, games = e.games, region = e.region })
+	end
+	MatchService.startRanked(players, { entries[1].loadout, entries[2].loadout }, function(winner, reason)
+		local leaver = if reason == "forfeit" then (if winner == 1 then 2 else 1) else nil
+		RankedResult.finish(sides, winner, leaver, fire)
+		for _, p in players do
+			if p.Parent then
+				sendProfile(p)
+			end
+		end
+	end)
+end
+
+-- Takes a player out of whatever they are in. In an unfinished match the other player wins.
 local function leave(player: Player)
 	removeFromQueue(player)
+	RankedQueue.leave(player)
 	local humanoid = humanoidOf(player)
 	if humanoid then
 		humanoid.WalkSpeed = WALK_SPEED
@@ -332,12 +404,22 @@ local function request(player: Player, mode: unknown, loadout: unknown)
 	if type(mode) ~= "string" then
 		return
 	end
-	if mode ~= ONLINE and not (Bot.Profiles :: any)[mode] then
+	if mode ~= ONLINE and mode ~= RANKED and not (Bot.Profiles :: any)[mode] then
 		return
 	end
 	leave(player)
 	local chosen = Abilities.sanitize(loadout)
-	if mode == ONLINE then
+	if mode == RANKED then
+		if RankedRoom.isRoom() then
+			return
+		end
+		local ok, reason = RankedQueue.join(player, chosen)
+		if ok then
+			fire(player, { kind = "Queued", ranked = true })
+		else
+			fire(player, { kind = "RankDenied", reason = reason })
+		end
+	elseif mode == ONLINE then
 		table.insert(queue, player)
 		queuedLoadouts[player] = chosen
 		fire(player, { kind = "Queued" })
@@ -469,6 +551,7 @@ local function step(dt: number)
 		end
 		dispatch(session, events)
 	end
+	RankedQueue.step()
 end
 
 function MatchService.start()
@@ -485,7 +568,35 @@ function MatchService.start()
 	end)
 	Net.get(Net.SWING).OnServerEvent:Connect(onSwing)
 	Net.get(Net.USE_ABILITY).OnServerEvent:Connect(onAbility)
-	Players.PlayerRemoving:Connect(leave)
+	Net.get(Net.HELLO).OnServerEvent:Connect(function(player)
+		task.spawn(function()
+			PlayerData.load(player.UserId)
+			if player.Parent then
+				sendProfile(player)
+				if RankedRoom.isRoom() and not byPlayer[player] then
+					fire(player, { kind = "RoomWaiting" })
+				end
+			end
+		end)
+	end)
+	Net.get(Net.REQUEST_LEADERBOARD).OnServerEvent:Connect(function(player, scope: unknown)
+		if scope ~= "GLOBAL" and not table.find(Regions.List, scope) then
+			return
+		end
+		task.spawn(function()
+			local rows = Leaderboard.top(scope :: string, 10)
+			fire(player, { kind = "Leaderboard", scope = scope, rows = rows })
+		end)
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		leave(player)
+		RankedQueue.forget(player)
+		PlayerData.forget(player.UserId)
+	end)
+	RankedQueue.init({ fire = fire, startLocal = startLocalRanked })
+	if RankedRoom.isRoom() then
+		task.spawn(RankedRoom.start, { fire = fire, startRanked = MatchService.startRanked })
+	end
 	local function watch(player: Player)
 		player.CharacterAdded:Connect(function()
 			local session = byPlayer[player]

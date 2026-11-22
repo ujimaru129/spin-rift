@@ -9,6 +9,7 @@ local Fake = {}
 
 -- The fake server clock. Tests move it forward.
 Fake.clock = { now = 0 }
+Fake.studio = true
 
 export type Signal = {
 	handlers: { (...any) -> () },
@@ -219,6 +220,109 @@ function Random.new(seed: number?)
 	return r
 end
 
+-- DataStores kept in memory. Fake.dataStores[name][key] = value.
+Fake.dataStores = {} :: { [string]: { [string]: any } }
+
+local function dataStore(name: string)
+	Fake.dataStores[name] = Fake.dataStores[name] or {}
+	local data = Fake.dataStores[name]
+	return {
+		GetAsync = function(_, key)
+			return data[key]
+		end,
+		SetAsync = function(_, key, value)
+			data[key] = value
+		end,
+		UpdateAsync = function(_, key, fn)
+			local new = fn(data[key])
+			if new ~= nil then
+				data[key] = new
+			end
+			return data[key]
+		end,
+		GetSortedAsync = function(_, ascending, pageSize)
+			local items = {}
+			for k, v in data do
+				table.insert(items, { key = k, value = v })
+			end
+			table.sort(items, function(a, b)
+				if ascending then
+					return a.value < b.value
+				end
+				return a.value > b.value
+			end)
+			local page = {}
+			for i = 1, math.min(pageSize, #items) do
+				page[i] = items[i]
+			end
+			return {
+				GetCurrentPage = function()
+					return page
+				end,
+			}
+		end,
+	}
+end
+
+-- MemoryStore sorted maps shared by every fake "server" in a test; entries expire on Fake.clock.
+Fake.memoryStores = {} :: { [string]: { [string]: { value: any, expires: number, sortKey: any } } }
+
+local function sortedMap(name: string)
+	Fake.memoryStores[name] = Fake.memoryStores[name] or {}
+	local data = Fake.memoryStores[name]
+	local function live(key)
+		local e = data[key]
+		if e and e.expires <= Fake.clock.now then
+			data[key] = nil
+			return nil
+		end
+		return e
+	end
+	return {
+		GetAsync = function(_, key)
+			local e = live(key)
+			return if e then e.value else nil
+		end,
+		SetAsync = function(_, key, value, expiration, sortKey)
+			data[key] = { value = value, expires = Fake.clock.now + expiration, sortKey = sortKey }
+			return true
+		end,
+		RemoveAsync = function(_, key)
+			data[key] = nil
+		end,
+		UpdateAsync = function(_, key, fn, expiration)
+			local e = live(key)
+			local new = fn(if e then e.value else nil)
+			if new == nil then
+				return nil
+			end
+			data[key] = { value = new, expires = Fake.clock.now + expiration }
+			return new
+		end,
+		GetRangeAsync = function(_, direction, count)
+			local items = {}
+			for k in data do
+				local e = live(k)
+				if e then
+					table.insert(items, { key = k, value = e.value, sortKey = e.sortKey })
+				end
+			end
+			table.sort(items, function(a, b)
+				return (a.sortKey or 0) < (b.sortKey or 0)
+			end)
+			local out = {}
+			for i = 1, math.min(count, #items) do
+				out[i] = items[i]
+			end
+			return out
+		end,
+	}
+end
+
+-- Teleports and reserved servers are only recorded.
+Fake.teleports = {} :: { any }
+Fake.reserved = 0
+
 -- Builds the globals a Roblox script expects. `shared` is the loader node for src/shared.
 function Fake.globals(sharedNode: any)
 	local workspace = Instance.new("Workspace")
@@ -236,10 +340,52 @@ function Fake.globals(sharedNode: any)
 	rawget(players, "__props").GetPlayers = function(self)
 		return self:GetChildren()
 	end
+	rawget(players, "__props").GetPlayerByUserId = function(self, userId)
+		for _, p in self:GetChildren() do
+			if p.UserId == userId then
+				return p
+			end
+		end
+		return nil
+	end
+	rawget(players, "__props").GetNameFromUserIdAsync = function(_, userId)
+		return "User" .. tostring(userId)
+	end
+	local runService = Instance.new("RunService")
+	rawget(runService, "__props").IsStudio = function()
+		return Fake.studio
+	end
 	local services = {
 		ReplicatedStorage = replicated,
 		Players = players,
-		RunService = Instance.new("RunService"),
+		RunService = runService,
+		DataStoreService = {
+			GetDataStore = function(_, name)
+				return dataStore(name)
+			end,
+			GetOrderedDataStore = function(_, name)
+				return dataStore("ordered:" .. name)
+			end,
+		},
+		MemoryStoreService = {
+			GetSortedMap = function(_, name)
+				return sortedMap(name)
+			end,
+		},
+		TeleportService = {
+			ReserveServer = function()
+				Fake.reserved += 1
+				return "code" .. Fake.reserved, "private" .. Fake.reserved
+			end,
+			TeleportAsync = function(_, placeId, list, options)
+				table.insert(Fake.teleports, { placeId = placeId, players = list, options = options })
+			end,
+		},
+		LocalizationService = {
+			GetCountryRegionForPlayerAsync = function(_, player)
+				return player.Country or "JP"
+			end,
+		},
 		TweenService = {
 			Create = function()
 				return { Play = function() end, Completed = Fake.signal() }
@@ -260,6 +406,10 @@ function Fake.globals(sharedNode: any)
 		GetService = function(_, name)
 			return assert(services[name], "no fake for service " .. tostring(name))
 		end,
+		PlaceId = 0,
+		JobId = "job-local",
+		PrivateServerId = "",
+		PrivateServerOwnerId = 0,
 	}
 	return {
 		game = game,
@@ -283,10 +433,15 @@ function Fake.globals(sharedNode: any)
 		},
 		task = {
 			delay = function() end,
-			defer = function() end,
-			spawn = function() end,
+			defer = function(fn, ...)
+				fn(...)
+			end,
+			spawn = function(fn, ...)
+				fn(...)
+			end,
 			wait = function() end,
 		},
+		warn = function() end,
 	}
 end
 

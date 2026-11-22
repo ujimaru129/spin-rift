@@ -158,10 +158,13 @@ return function(loader, expect)
 				local replicated = globals.game:GetService("ReplicatedStorage")
 				Fake.clock.now = 1000
 
+				local nextUserId = 0
 				local function makePlayer(name: string)
 					local p = globals.Instance.new("Player")
 					p.Name = name
 					p.DisplayName = name
+					nextUserId += 1
+					p.UserId = nextUserId
 					globals.Instance.new("PlayerGui", p)
 					local character = globals.Instance.new("Model")
 					local root = globals.Instance.new("Part", character)
@@ -220,13 +223,10 @@ return function(loader, expect)
 								myRoot.CFrame = roblox.CFrame.new(origin + Vector3.new(-14, 3.5, incoming.to.Z))
 								-- arm Lightning Smash for this return now and then
 								if math.random() < 0.3 then
-									UserInputService.InputBegan:Fire(
-										{
-											UserInputType = roblox.Enum.UserInputType.Keyboard,
-											KeyCode = roblox.Enum.KeyCode.Q,
-										},
-										false
-									)
+									UserInputService.InputBegan:Fire({
+										UserInputType = roblox.Enum.UserInputType.Keyboard,
+										KeyCode = roblox.Enum.KeyCode.Q,
+									}, false)
 								end
 							end
 						elseif e.kind == "ServeWait" then
@@ -272,6 +272,7 @@ return function(loader, expect)
 				local other = globals.Instance.new("Player")
 				other.Name = "Rival"
 				other.DisplayName = "Rival"
+				other.UserId = 2
 				local character = globals.Instance.new("Model")
 				local root = globals.Instance.new("Part", character)
 				root.Name = "HumanoidRootPart"
@@ -311,6 +312,200 @@ return function(loader, expect)
 				expect(last ~= nil).toBeTruthy()
 				expect(last.reason).toBe("forfeit")
 				expect(last.winner).toBe(start.you)
+			end,
+		},
+		{
+			"two players in Studio are paired for ranked, play, and both ratings are saved",
+			function()
+				local Players = globals.game:GetService("Players")
+				local RunService = globals.game:GetService("RunService")
+				local UserInputService = globals.game:GetService("UserInputService")
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local me = Fake.localPlayer
+				local myRoot = me.Character:FindFirstChild("HumanoidRootPart")
+				-- "Rival" from the previous test left; bring in a fresh opponent
+				local rival = globals.Instance.new("Player")
+				rival.Name = "Rookie"
+				rival.DisplayName = "Rookie"
+				rival.UserId = 3
+				local character = globals.Instance.new("Model")
+				local root = globals.Instance.new("Part", character)
+				root.Name = "HumanoidRootPart"
+				root.CFrame = roblox.CFrame.new(0, 3, 0)
+				globals.Instance.new("Humanoid", character)
+				rival.Character = character
+				rival.Parent = Players
+
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				remotes.Hello:FireServer()
+				local profile
+				for _, e in seen do
+					if e.kind == "Profile" then
+						profile = e
+					end
+				end
+				expect(profile.rating).toBe(1000)
+				expect(profile.tier).toBe("ブロンズ II")
+
+				remotes.RequestMatch:FireServer("Ranked", { "Curve", "Blink" })
+				remotes.RequestMatch.OnServerEvent:Fire(rival, "Ranked", { "Smash", "Barrier" })
+				local start, over, result
+				local incoming, serveAt
+				local read = 0
+				for _ = 1, 60 * 60 * 15 do
+					Fake.clock.now += 1 / 60
+					RunService.Heartbeat:Fire(1 / 60)
+					RunService.RenderStepped:Fire(1 / 60)
+					for i = read + 1, #seen do
+						local e = seen[i]
+						if e.kind == "Start" then
+							start = e
+						elseif e.kind == "Shot" and start then
+							incoming = if e.shot.hitterSide ~= start.side then e.shot else nil
+							if incoming then
+								myRoot.CFrame =
+									roblox.CFrame.new(start.origin + Vector3.new(start.side * 14, 3.5, incoming.to.Z))
+							end
+						elseif e.kind == "ServeWait" and start then
+							serveAt = if e.server == start.you then e.at else nil
+						elseif e.kind == "MatchOver" then
+							over = e
+						elseif e.kind == "RankResult" then
+							result = e
+						end
+					end
+					read = #seen
+					local click =
+						{ UserInputType = roblox.Enum.UserInputType.MouseButton1, KeyCode = roblox.Enum.KeyCode.F }
+					if incoming and Fake.clock.now >= Trajectory.arrivalTime(incoming) - 0.005 then
+						incoming = nil
+						UserInputService.InputBegan:Fire(click, false)
+					end
+					if serveAt and Fake.clock.now >= serveAt + 0.1 then
+						serveAt = nil
+						UserInputService.InputBegan:Fire(click, false)
+					end
+					if result then
+						break
+					end
+				end
+				expect(start.ranked).toBe(true)
+				expect(start.opponent).toBe("Rookie")
+				expect(over.winner).toBe(start.you)
+				-- first ranked game: placement, so a win against an equal player is worth +40
+				expect(result.delta).toBe(40)
+				expect(result.after).toBe(1040)
+				local saved = Fake.dataStores.PlayerData_v1
+				expect(saved["u_" .. me.UserId].rating).toBe(1040)
+				expect(saved["u_" .. me.UserId].wins).toBe(1)
+				expect(saved.u_3.rating).toBe(960)
+				expect(saved.u_3.losses).toBe(1)
+				-- the world leaderboard has both
+				local board = Fake.dataStores["ordered:Rating_S1_GLOBAL"]
+				expect(board[tostring(me.UserId)]).toBe(1040)
+				remotes.RequestLeaderboard:FireServer("GLOBAL")
+				expect(seen[#seen].kind).toBe("Leaderboard")
+				expect(seen[#seen].rows[1].rating).toBe(1040)
+				remotes.LeaveMatch:FireServer()
+				Players.PlayerRemoving:Fire(rival)
+				rival.Parent = nil
+			end,
+		},
+		{
+			"in a published game, players in different servers are paired through MemoryStore and teleported",
+			function()
+				local RankedQueue = loader.require("src/server/RankedQueue")
+				local RunService = globals.game:GetService("RunService")
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				RankedQueue.setMode("global")
+				globals.game.PlaceId = 123
+				-- someone in another server is already waiting
+				local queue = globals.game:GetService("MemoryStoreService"):GetSortedMap("RankedQueue_v1")
+				queue:SetAsync("99", {
+					id = "99",
+					userId = 99,
+					name = "Faraway",
+					rating = 1030,
+					games = 4,
+					region = "ASIA",
+					joinedAt = Fake.clock.now - 5,
+					loadout = { "Phantom", "Blink" },
+					jobId = "job-other",
+				}, 120, 1030)
+				remotes.RequestMatch:FireServer("Ranked", { "Curve", "Blink" })
+				for _ = 1, 60 * 4 do
+					Fake.clock.now += 1 / 60
+					RunService.Heartbeat:Fire(1 / 60)
+				end
+				local teleport = Fake.teleports[#Fake.teleports]
+				expect(teleport ~= nil).toBeTruthy()
+				expect(teleport.players[1]).toBe(Fake.localPlayer)
+				expect(teleport.options.ReservedServerAccessCode).toBe("code" .. Fake.reserved)
+				local teleporting = false
+				for _, e in seen do
+					if e.kind == "Teleporting" then
+						teleporting = true
+					end
+				end
+				expect(teleporting).toBe(true)
+				-- the reserved server can read who is coming
+				local info = RankedQueue.readMatch("private" .. Fake.reserved)
+				expect(#info.players).toBe(2)
+				-- the other server's player still has an assignment waiting for them
+				local assign = globals.game:GetService("MemoryStoreService"):GetSortedMap("RankedAssign_v1")
+				expect(assign:GetAsync("99").code).toBe("code" .. Fake.reserved)
+				expect(queue:GetAsync("99")).toBe(nil)
+				RankedQueue.setMode("local")
+				globals.game.PlaceId = 0
+			end,
+		},
+		{
+			"a reserved ranked server starts the match when both players arrive",
+			function()
+				local RankedRoom = loader.require("src/server/RankedRoom")
+				local Players = globals.game:GetService("Players")
+				local memory = globals.game:GetService("MemoryStoreService"):GetSortedMap("RankedMatch_v1")
+				memory:SetAsync("room-1", {
+					players = {
+						{ id = "1", userId = 1, rating = 1040, games = 1, region = "ASIA", loadout = { "Curve" } },
+						{ id = "50", userId = 50, rating = 1000, games = 0, region = "ASIA", loadout = { "Blink" } },
+					},
+				}, 900)
+				globals.game.PrivateServerId = "room-1"
+				expect(RankedRoom.isRoom()).toBe(true)
+				local started, fired = nil, {}
+				RankedRoom.start({
+					fire = function(p, e)
+						table.insert(fired, e.kind)
+					end,
+					startRanked = function(players, loadouts, onOver)
+						started = { players = players, loadouts = loadouts, onOver = onOver }
+					end,
+				})
+				expect(started).toBe(nil) -- only player 1 is here so far
+				local guest = globals.Instance.new("Player")
+				guest.UserId = 50
+				guest.DisplayName = "Guest"
+				guest.Parent = Players
+				Players.PlayerAdded:Fire(guest)
+				expect(started ~= nil).toBeTruthy()
+				expect(started.loadouts[2][1]).toBe("Blink")
+				-- the guest leaves mid-match: player 1 wins, the guest loses and gets an abandon mark
+				started.onOver(1, "forfeit")
+				local saved = Fake.dataStores.PlayerData_v1
+				expect(saved.u_50.leaves).toBe(1)
+				expect(saved.u_50.rating < 1000).toBeTruthy()
+				globals.game.PrivateServerId = ""
+				guest.Parent = nil
 			end,
 		},
 	}

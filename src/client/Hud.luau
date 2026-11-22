@@ -22,6 +22,7 @@ export type Callbacks = {
 	onRetry: () -> (),
 	onSwingButton: () -> (),
 	onAbility: (slot: number) -> (),
+	onLeaderboard: (scope: string) -> (),
 }
 
 export type Slot = { frame: TextButton, name: TextLabel, cost: TextLabel, key: TextLabel, stroke: UIStroke }
@@ -42,6 +43,18 @@ export type Hud = typeof(setmetatable(
 		match: Frame,
 		result: Frame,
 		waiting: Frame,
+		waitTitle: TextLabel,
+		waitSub: TextLabel,
+		waitBot: TextButton,
+		waitCancel: TextButton,
+		profile: TextLabel,
+		menuNote: TextLabel,
+		board: Frame,
+		boardTitle: TextLabel,
+		boardRows: { TextLabel },
+		boardTabs: { TextButton },
+		boardRegion: string,
+		rankLine: TextLabel,
 		ping: TextLabel,
 		resultNote: TextLabel,
 		myPoints: TextLabel,
@@ -158,24 +171,44 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	menuMax.Parent = menu
 	menu.AutomaticSize = Enum.AutomaticSize.Y
 	vlist(menu, 10)
-	local title = label(menu, "SPIN RIFT", 40, Palette.TeamA)
+	local title = label(menu, "SUPER BATTLE\nPING-PONG!!", 30, Palette.TeamA)
 	title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
-	label(menu, "試作版（フェーズ3）", 14, INK_DIM, FONT_REGULAR)
-	button(menu, "オンライン対戦（このサーバーの人と）", Palette.Grade.Perfect, function()
+	title.Size = UDim2.new(1, 0, 0, 68)
+	title.TextScaled = true
+	local profile = label(menu, "ランク：読み込み中…", 14, INK, FONT_REGULAR)
+	local menuNote = label(menu, "", 13, Palette.Grade.Miss, FONT_REGULAR)
+	menuNote.Visible = false
+	button(menu, "ランク戦", Palette.Grade.Perfect, function()
+		callbacks.onMode("Ranked")
+	end)
+	button(menu, "カジュアル戦（このサーバーの人と）", Palette.TeamB, function()
 		callbacks.onMode("Online")
 	end)
-	button(menu, "壁打ち", Palette.TeamA, function()
-		callbacks.onMode("Wall")
-	end)
-	button(menu, "Bot と対戦：やさしい", Palette.Grade.Good, function()
-		callbacks.onMode("Easy")
-	end)
-	button(menu, "Bot と対戦：ふつう", Palette.TeamB, function()
-		callbacks.onMode("Normal")
-	end)
-	button(menu, "Bot と対戦：つよい", Palette.Grade.Perfect, function()
-		callbacks.onMode("Hard")
-	end)
+	local practiceTitle = label(menu, "練習", 13, INK_DIM, FONT)
+	practiceTitle.TextXAlignment = Enum.TextXAlignment.Left
+	local practice = Instance.new("Frame")
+	practice.BackgroundTransparency = 1
+	practice.Size = UDim2.new(1, 0, 0, 36 * 2 + 6)
+	practice.Parent = menu
+	local pg = Instance.new("UIGridLayout")
+	pg.CellSize = UDim2.new(0.5, -3, 0, 36)
+	pg.CellPadding = UDim2.fromOffset(6, 6)
+	pg.SortOrder = Enum.SortOrder.LayoutOrder
+	pg.Parent = practice
+	for order, m in
+		{
+			{ "Wall", "壁打ち" },
+			{ "Easy", "Bot：やさしい" },
+			{ "Normal", "Bot：ふつう" },
+			{ "Hard", "Bot：つよい" },
+		}
+	do
+		local b = button(practice, m[2], Palette.TeamA, function()
+			callbacks.onMode(m[1])
+		end)
+		b.LayoutOrder = order
+		b.TextSize = 15
+	end
 	-- ability picker
 	local pickTitle = label(menu, "能力を2つ選ぶ", 14, INK, FONT)
 	pickTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -202,6 +235,48 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	)
 	help.Size = UDim2.new(1, 0, 0, 84)
 	help.TextXAlignment = Enum.TextXAlignment.Left
+	button(menu, "ランキングを見る", Palette.TeamA, function()
+		callbacks.onLeaderboard("GLOBAL")
+	end).Size =
+		UDim2.new(1, 0, 0, 36)
+
+	-- leaderboard
+	local board = panel(gui, "Leaderboard")
+	board.AnchorPoint = Vector2.new(0.5, 0.5)
+	board.Position = UDim2.fromScale(0.5, 0.5)
+	board.Size = UDim2.new(0, 340, 0, 0)
+	board.AutomaticSize = Enum.AutomaticSize.Y
+	board.Visible = false
+	board.ZIndex = 5
+	vlist(board, 6)
+	local boardTitle = label(board, "ランキング", 20, Palette.Grade.Perfect)
+	local tabs = Instance.new("Frame")
+	tabs.BackgroundTransparency = 1
+	tabs.Size = UDim2.new(1, 0, 0, 32)
+	tabs.Parent = board
+	local tl = Instance.new("UIListLayout")
+	tl.FillDirection = Enum.FillDirection.Horizontal
+	tl.Padding = UDim.new(0, 6)
+	tl.Parent = tabs
+	local boardTabs: { TextButton } = {}
+	for i, text in { "世界", "地域" } do
+		local t = button(tabs, text, Palette.TeamA, function() end)
+		t.Size = UDim2.new(0.5, -3, 1, 0)
+		t.TextSize = 14
+		boardTabs[i] = t
+	end
+	local boardRows: { TextLabel } = {}
+	for i = 1, 10 do
+		local r = label(board, "", 14, INK, FONT_REGULAR)
+		r.TextXAlignment = Enum.TextXAlignment.Left
+		r.LayoutOrder = 10 + i
+		boardRows[i] = r
+	end
+	local closeBoard = button(board, "閉じる", Palette.TeamB, function()
+		board.Visible = false
+	end)
+	closeBoard.LayoutOrder = 100
+	closeBoard.Size = UDim2.new(1, 0, 0, 36)
 
 	-- waiting for an opponent
 	local waiting = panel(gui, "Waiting")
@@ -211,16 +286,19 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	waiting.AutomaticSize = Enum.AutomaticSize.Y
 	waiting.Visible = false
 	vlist(waiting, 10)
-	label(waiting, "相手を待っています…", 22, INK)
-	label(
+	local waitTitle = label(waiting, "相手を待っています…", 22, INK)
+	local waitSub = label(waiting, "", 13, INK_DIM, FONT_REGULAR)
+	waitSub.Size = UDim2.new(1, 0, 0, 36)
+	local waitBot = button(
 		waiting,
-		"このサーバーで、もう1人が「オンライン対戦」を押すと始まります",
-		13,
-		INK_DIM,
-		FONT_REGULAR
-	).Size =
-		UDim2.new(1, 0, 0, 36)
-	button(waiting, "キャンセル", Palette.TeamB, callbacks.onLeave)
+		"Bot と対戦する（レートは変わりません）",
+		Palette.Grade.Good,
+		function()
+			callbacks.onMode("Normal")
+		end
+	)
+	waitBot.Visible = false
+	local waitCancel = button(waiting, "キャンセル", Palette.TeamB, callbacks.onLeave)
 
 	-- match HUD
 	local match = Instance.new("Frame")
@@ -362,6 +440,9 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local resultTitle = label(result, "", 40, Palette.Grade.Perfect)
 	local resultScore = label(result, "", 18, INK_DIM, FONT_REGULAR)
 	local resultNote = label(result, "", 14, INK_DIM, FONT_REGULAR)
+	local rankLine = label(result, "", 18, INK)
+	rankLine.Size = UDim2.new(1, 0, 0, 48)
+	rankLine.Visible = false
 	button(result, "もう一度", Palette.TeamA, callbacks.onRetry)
 	button(result, "メニューへ", Palette.TeamB, callbacks.onLeave)
 
@@ -464,6 +545,18 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		match = match,
 		result = result,
 		waiting = waiting,
+		waitTitle = waitTitle,
+		waitSub = waitSub,
+		waitBot = waitBot,
+		waitCancel = waitCancel,
+		profile = profile,
+		menuNote = menuNote,
+		board = board,
+		boardTitle = boardTitle,
+		boardRows = boardRows,
+		boardTabs = boardTabs,
+		boardRegion = "ASIA",
+		rankLine = rankLine,
 		ping = ping,
 		resultNote = resultNote,
 		myPoints = myPoints,
@@ -518,7 +611,75 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		pickChips[def.id] = chip
 	end
 	self:refreshPicks(self.loadout[1])
+	boardTabs[1].Activated:Connect(function()
+		callbacks.onLeaderboard("GLOBAL")
+	end)
+	boardTabs[2].Activated:Connect(function()
+		callbacks.onLeaderboard(self.boardRegion)
+	end)
 	return self
+end
+
+local REGION_NAMES =
+	{ NA = "北米", SA = "南米", EU = "ヨーロッパ", ASIA = "アジア", OCE = "オセアニア" }
+
+function Hud.setProfile(self: Hud, p: { [string]: any })
+	local record = `{p.wins}勝{p.losses}敗`
+	local extra = if p.placement > 0 then `（あと{p.placement}試合で順位が安定）` else ""
+	self.profile.Text = `{p.tier}  レート {p.rating}  {record}  {REGION_NAMES[p.region] or p.region}{extra}`
+	self.boardRegion = p.region
+	self.boardTabs[2].Text = REGION_NAMES[p.region] or "地域"
+end
+
+-- A short message on the menu (e.g. why ranked play was refused). Empty hides it.
+function Hud.setMenuNote(self: Hud, text: string)
+	self.menuNote.Text = text
+	self.menuNote.Visible = text ~= ""
+end
+
+export type WaitOptions = { title: string, sub: string?, cancel: boolean?, bot: boolean? }
+
+function Hud.showWaiting(self: Hud, opts: WaitOptions?)
+	local o: WaitOptions = opts
+		or {
+			title = "相手を待っています…",
+			sub = "このサーバーで、もう1人が「カジュアル戦」を押すと始まります",
+		}
+	self.menu.Visible = false
+	self.match.Visible = false
+	self.result.Visible = false
+	self.board.Visible = false
+	self.waiting.Visible = true
+	self.waitTitle.Text = o.title
+	self.waitSub.Text = o.sub or ""
+	self.waitCancel.Visible = o.cancel ~= false
+	self.waitBot.Visible = o.bot == true
+end
+
+function Hud.showLeaderboard(self: Hud, scope: string, rows: { { [string]: any } })
+	self.board.Visible = true
+	self.boardTitle.Text = if scope == "GLOBAL"
+		then "ランキング（世界）"
+		else `ランキング（{REGION_NAMES[scope] or scope}）`
+	for i, r in self.boardRows do
+		local row = rows[i]
+		r.Text = if row
+			then `{row.rank}.  {row.name}   {row.rating}`
+			elseif i == 1 then "まだ記録がありません"
+			else ""
+	end
+end
+
+-- After a ranked match: how the rating and rank moved.
+function Hud.setRankResult(self: Hud, e: { [string]: any })
+	local sign = if e.delta >= 0 then "+" else ""
+	local tierText = if e.tierAfter ~= e.tierBefore then `{e.tierBefore} → {e.tierAfter}` else e.tierAfter
+	self.rankLine.Text = `レート {e.before} → {e.after}（{sign}{e.delta}）\n{tierText}`
+	self.rankLine.TextColor3 = if e.delta >= 0 then Palette.Grade.Good else Palette.Grade.Miss
+	self.rankLine.Visible = true
+	if e.rankUp then
+		self:popupText(`ランクアップ！ {e.tierAfter}`, Palette.Grade.Perfect)
+	end
 end
 
 -- Picking a third ability drops the oldest pick.
@@ -601,14 +762,9 @@ function Hud.showMenu(self: Hud)
 	self.waiting.Visible = false
 end
 
-function Hud.showWaiting(self: Hud)
-	self.menu.Visible = false
-	self.match.Visible = false
-	self.result.Visible = false
-	self.waiting.Visible = true
-end
-
 function Hud.showMatch(self: Hud, opponentName: string)
+	self.rankLine.Visible = false
+	self.board.Visible = false
 	self.menu.Visible = false
 	self.result.Visible = false
 	self.waiting.Visible = false
