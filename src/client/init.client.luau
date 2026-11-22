@@ -46,6 +46,11 @@ local me = 1 -- our player index in the current match (1 stands on side -1)
 local mySide = -1
 local currentMode = "Wall"
 local stickAim = 0
+-- direction keys held right now (on screen): arrows move us ourselves, A/D move through Roblox
+local arrowLeft, arrowRight, keyA, keyD = false, false, false, false
+-- mouse aim only counts while the mouse is being used (a trackpad user never has to touch it)
+local MOUSE_AIM_FOR = 1.5
+local lastMouseMove = -math.huge
 local shake = 0
 local cameraZ = 0
 local lastSwingSent = 0
@@ -75,15 +80,30 @@ local function myRoot(): BasePart?
 	return if root and root:IsA("BasePart") then root else nil
 end
 
--- Aim across the table as a world Z direction, -1..1.
--- Mouse and right stick aim left/right on screen; the screen's right is +Z or -Z depending on side.
+-- Aim across the table as a world Z direction, -1..1. In order:
+--   1. a direction key held as you hit (← → or A D): that side, as seen on screen
+--   2. the mouse, if it moved in the last moments: left/right of the screen
+--   3. the right stick
+--   4. the way you are moving (phones: the move stick)
+-- The screen's right is +Z or -Z depending on which side of the table we are on.
+local function screenFlip(): number
+	return if camera.CFrame.RightVector:Dot(Vector3.zAxis) >= 0 then 1 else -1
+end
+
+local function heldDirection(): number
+	return ((if arrowRight or keyD then 1 else 0) - (if arrowLeft or keyA then 1 else 0))
+end
+
 local function currentAim(): number
-	local screenRightIsPlusZ = camera.CFrame.RightVector:Dot(Vector3.zAxis) >= 0
-	local flip = if screenRightIsPlusZ then 1 else -1
-	if UserInputService.MouseEnabled and not UserInputService.TouchEnabled then
+	local flip = screenFlip()
+	local keys = heldDirection()
+	if keys ~= 0 then
+		return keys * flip
+	end
+	if UserInputService.MouseEnabled and os.clock() - lastMouseMove < MOUSE_AIM_FOR then
 		local m = UserInputService:GetMouseLocation()
 		local w = camera.ViewportSize.X
-		return math.clamp((m.X / w) * 2 - 1, -1, 1) * 1.4 * flip
+		return math.clamp(((m.X / w) * 2 - 1) * 1.4, -1, 1) * flip
 	end
 	if math.abs(stickAim) > 0.15 then
 		return stickAim * flip
@@ -186,14 +206,19 @@ hud:setArenaButton(arenaButtonText())
 
 -- Left/Right arrow keys move across the table. Roblox's own controls give these keys to the
 -- camera, which our match camera does not use, so we steer the character while they are held.
-local arrowLeft, arrowRight = false, false
+-- A and D are only noted (Roblox moves us with them) because a held direction also aims.
 local function trackArrow(input: InputObject, down: boolean): boolean
-	if input.KeyCode == Enum.KeyCode.Left then
+	local key = input.KeyCode
+	if key == Enum.KeyCode.Left then
 		arrowLeft = down
 		return true
-	elseif input.KeyCode == Enum.KeyCode.Right then
+	elseif key == Enum.KeyCode.Right then
 		arrowRight = down
 		return true
+	elseif key == Enum.KeyCode.A then
+		keyA = down
+	elseif key == Enum.KeyCode.D then
+		keyD = down
 	end
 	return false
 end
@@ -222,16 +247,24 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 	local t = input.UserInputType
 	local key = input.KeyCode
-	if t == Enum.UserInputType.MouseButton1 or key == Enum.KeyCode.Space or key == Enum.KeyCode.ButtonR2 then
+	-- left hand: Space hits, Q/E use abilities; right hand (for A/D players): J hits, K/L abilities
+	if
+		t == Enum.UserInputType.MouseButton1
+		or key == Enum.KeyCode.Space
+		or key == Enum.KeyCode.J
+		or key == Enum.KeyCode.ButtonR2
+	then
 		swing()
-	elseif key == Enum.KeyCode.Q or key == Enum.KeyCode.ButtonL1 then
+	elseif key == Enum.KeyCode.Q or key == Enum.KeyCode.K or key == Enum.KeyCode.ButtonL1 then
 		useAbility(1)
-	elseif key == Enum.KeyCode.E or key == Enum.KeyCode.ButtonL2 then
+	elseif key == Enum.KeyCode.E or key == Enum.KeyCode.L or key == Enum.KeyCode.ButtonL2 then
 		useAbility(2)
 	end
 end)
 UserInputService.InputChanged:Connect(function(input)
-	if input.KeyCode == Enum.KeyCode.Thumbstick2 then
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		lastMouseMove = os.clock()
+	elseif input.KeyCode == Enum.KeyCode.Thumbstick2 then
 		stickAim = input.Position.X
 	end
 end)
@@ -296,7 +329,7 @@ local function refreshSlots()
 		local def = Abilities.get(id)
 		if armedId == id then
 			states[i] = "armed"
-		elseif def and inRally and not usedThisRally and myGauge >= def.cost then
+		elseif def and (inRally or def.kind == "shot") and not usedThisRally and myGauge >= def.cost then
 			states[i] = "ready"
 		else
 			states[i] = "waiting"
@@ -572,6 +605,15 @@ RunService.Heartbeat:Connect(function(dt)
 	local debugMs = ReplicatedStorage:GetAttribute(Net.DEBUG_LAG_ATTRIBUTE)
 	local extra = if type(debugMs) == "number" then debugMs else 0
 	hud:setPing(player:GetNetworkPing() * 1000 + extra)
+end)
+
+-- Aim marker: shows which way the next return will go while the ball is in play.
+RunService.RenderStepped:Connect(function()
+	if not origin or not inRally then
+		hud:setAim(nil)
+		return
+	end
+	hud:setAim(currentAim() * screenFlip())
 end)
 
 -- Arrow-key movement, after Roblox's controls have set this frame's move (so ours wins).

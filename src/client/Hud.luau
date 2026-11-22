@@ -95,6 +95,7 @@ export type Hud = typeof(setmetatable(
 		popupSub: TextLabel,
 		hint: TextLabel,
 		controls: TextLabel,
+		aim: TextLabel,
 		tutorial: TextLabel,
 		announce: TextLabel,
 		slots: { Slot },
@@ -344,7 +345,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local pickChips: { [string]: TextButton } = {}
 
 	local help = bind(label(menu, "", 13, INK_DIM, FONT_REGULAR), "menu.help")
-	help.Size = UDim2.new(1, 0, 0, 84)
+	help.Size = UDim2.new(1, 0, 0, 104)
 	help.TextXAlignment = Enum.TextXAlignment.Left
 
 	local extras = row(menu, 36)
@@ -622,9 +623,10 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	-- how to play, always on screen during a match (text depends on the device; see setControls)
 	local controls = label(match, "", 13, INK, FONT_REGULAR)
 	controls.Name = "Controls"
-	controls.AnchorPoint = Vector2.new(0, 1)
-	controls.Position = UDim2.new(0, 14, 1, -76)
-	controls.Size = UDim2.fromOffset(250, 84)
+	-- bottom left on computers; top left on phones, where the bottom left is the move stick
+	controls.AnchorPoint = Vector2.new(0, if UserInputService.TouchEnabled then 0 else 1)
+	controls.Position = if UserInputService.TouchEnabled then UDim2.new(0, 14, 0, 44) else UDim2.new(0, 14, 1, -76)
+	controls.Size = UDim2.fromOffset(270, 102)
 	controls.TextXAlignment = Enum.TextXAlignment.Left
 	controls.TextYAlignment = Enum.TextYAlignment.Top
 	controls.TextWrapped = true
@@ -741,15 +743,27 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		slots[i] = { frame = b, name = name, cost = cost, key = key, stroke = st }
 	end
 	if UserInputService.TouchEnabled then
-		-- above the swing button on phones
+		-- around the swing button on phones, so the right thumb reaches all three:
+		-- ability 1 to its left, ability 2 just above it
 		slotBar.AnchorPoint = Vector2.new(1, 1)
-		slotBar.Position = UDim2.new(1, -20, 1, -272)
-		slotBar.Size = UDim2.fromOffset(170, 2 * 56 + 8)
+		slotBar.Position = UDim2.new(1, 0, 1, 0)
+		slotBar.Size = UDim2.fromOffset(300, 400)
+		-- inside this 300x400 box the swing button covers x 152..264, y 138..250
+		local places = { UDim2.fromOffset(20, 166), UDim2.fromOffset(152, 70) }
 		for i, s in slots do
-			s.frame.Position = UDim2.fromOffset(0, (i - 1) * 64)
+			s.frame.Position = places[i] or s.frame.Position
+			s.frame.Size = UDim2.fromOffset(if i == 1 then 120 else 112, 56)
 			s.key.Text = ""
 		end
 	end
+
+	-- which way the next return will go: ◀ ● ▶ (left, straight, right on screen)
+	local aim = label(match, "", 16, INK)
+	aim.Name = "Aim"
+	aim.AnchorPoint = Vector2.new(0.5, 1)
+	aim.Position = UDim2.new(0.5, 0, 1, if UserInputService.TouchEnabled then -60 else -120)
+	aim.Size = UDim2.fromOffset(220, 24)
+	aim.Visible = false
 
 	local announce = label(match, "", 26, INK)
 	announce.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -807,6 +821,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		popupSub = popupSub,
 		hint = hint,
 		controls = controls,
+		aim = aim,
 		tutorial = tutorial,
 		announce = announce,
 		slots = slots,
@@ -1322,6 +1337,20 @@ end
 
 function Hud.setHint(self: Hud, text: string)
 	self.hint.Text = text
+end
+
+-- The aim marker: nil hides it, otherwise -1 (left on screen) .. 1 (right on screen).
+function Hud.setAim(self: Hud, screenAim: number?)
+	if screenAim == nil then
+		self.aim.Visible = false
+		return
+	end
+	self.aim.Visible = true
+	local mark = if screenAim < -0.33
+		then "◀◀  ·  ·"
+		elseif screenAim > 0.33 then "·  ·  ▶▶"
+		else "·  ●  ·"
+	self.aim.Text = S.t("hud.aim", { mark = mark })
 end
 
 -- The how-to-play box shown during a match.

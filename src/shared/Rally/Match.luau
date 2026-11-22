@@ -252,7 +252,10 @@ function Match.useAbility(self: Match, index: number, slot: number, now: number,
 		return {}
 	end
 	self.idle[index] = 0
-	if self.phase ~= "Rally" then
+	-- shot abilities may also be armed between points (they fire on your next return), so you
+	-- can get ready while the ball is not in play; the others only work during a rally
+	local between = self.phase == "Paused" and def.kind == "shot"
+	if self.phase ~= "Rally" and not between then
 		return deny(index, id, "notRally")
 	end
 	if self.usedThisRally[index] then

@@ -182,7 +182,24 @@ return function(loader, expect)
 				m:update(Trajectory.arrivalTime(m.shot) + 5)
 				expect(m.phase).toBe("Paused")
 				expect(m.usedThisRally[1]).toBe(false)
-				expect(m:useAbility(1, 1, 100)[1].reason).toBe("notRally")
+				expect(m:useAbility(1, 1, 100)[1].reason).toBe("notRally") -- Blink is instant
+			end,
+		},
+		{
+			"a shot ability can be armed between points and fires on the next return",
+			function()
+				-- player 2 has Curve and full gauge; the match has not started yet (waiting to serve)
+				local m = Match.new(0, 1, { {}, { "Curve", "Blink" } })
+				m.gauge = { Config.Gauge.max, Config.Gauge.max }
+				expect(m.phase).toBe("Paused")
+				local armed = m:useAbility(2, 1, 0.5)
+				expect(armed[1].state).toBe("armed")
+				-- an instant ability still needs a rally
+				expect(m:useAbility(2, 2, 0.5)[1].reason).toBe("notRally")
+				m:serve(m.nextServeAt, 0, 0)
+				local events = returnBall(m, 0, 3)
+				expect(find(events, "Ability").state).toBe("fired")
+				expect(find(events, "Shot").shot.effects.ability).toBe("Curve")
 			end,
 		},
 		{

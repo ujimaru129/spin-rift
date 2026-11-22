@@ -326,6 +326,47 @@ return function(loader, expect)
 				find(me:FindFirstChildOfClass("PlayerGui"))
 				expect(box ~= nil).toBeTruthy()
 				expect(string.find(box.Text, "←", 1, true) ~= nil).toBeTruthy()
+
+				-- aiming: the direction held as you hit sets the side; nothing held = straight
+				local swings, abilities = {}, {}
+				local sConn = remotes.Swing.OnServerEvent:Connect(function(_, _t, aim)
+					table.insert(swings, aim)
+				end)
+				local aConn = remotes.UseAbility.OnServerEvent:Connect(function(_, slot)
+					table.insert(abilities, slot)
+				end)
+				local function press(code)
+					local input = { KeyCode = code, UserInputType = roblox.Enum.UserInputType.Keyboard }
+					UserInputService.InputBegan:Fire(input, false)
+					UserInputService.InputEnded:Fire(input, false)
+				end
+				local function waitSwingGap()
+					Fake.clock.now += 0.2
+				end
+				-- J hits, with nothing held: straight
+				press(roblox.Enum.KeyCode.J)
+				expect(swings[#swings]).toBe(0)
+				-- holding → while hitting aims to screen-right, the same world side as moving right
+				waitSwingGap()
+				UserInputService.InputBegan:Fire(right, false)
+				press(roblox.Enum.KeyCode.Space)
+				UserInputService.InputEnded:Fire(right, false)
+				expect(math.abs(swings[#swings]) == 1).toBeTruthy()
+				expect(swings[#swings] * v.Z > 0).toBeTruthy()
+				-- holding A (Roblox moves us; we only note it) aims the other way
+				waitSwingGap()
+				local a = { KeyCode = roblox.Enum.KeyCode.A, UserInputType = roblox.Enum.UserInputType.Keyboard }
+				UserInputService.InputBegan:Fire(a, false)
+				press(roblox.Enum.KeyCode.J)
+				UserInputService.InputEnded:Fire(a, false)
+				expect(swings[#swings] * v.Z < 0).toBeTruthy()
+				-- K and L use abilities 1 and 2, like Q and E
+				press(roblox.Enum.KeyCode.K)
+				press(roblox.Enum.KeyCode.L)
+				expect(abilities[#abilities - 1]).toBe(1)
+				expect(abilities[#abilities]).toBe(2)
+				sConn:Disconnect()
+				aConn:Disconnect()
 				conn:Disconnect()
 				remotes.LeaveMatch:FireServer()
 			end,
