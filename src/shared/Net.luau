@@ -15,6 +15,8 @@ Net.SWING = "Swing"
 Net.USE_ABILITY = "UseAbility" -- client -> server: (slot: 1 | 2, dirZ: number) — dirZ is for Blink
 Net.HELLO = "Hello" -- client -> server: () — the client is ready; the server replies with a Profile event
 Net.REQUEST_LEADERBOARD = "RequestLeaderboard" -- client -> server: (scope: "GLOBAL" | region id)
+-- client -> server: (category: "fun" | "bug" | "balance" | "other", text: string, locale: string)
+Net.SEND_FEEDBACK = "SendFeedback"
 Net.MATCH_EVENT = "MatchEvent" -- server -> client: (event: { kind: string, ... })
 
 -- Set this attribute on ReplicatedStorage in Studio (e.g. 200) to add that many ms of round-trip
@@ -28,6 +30,7 @@ local REMOTES = {
 	Net.USE_ABILITY,
 	Net.HELLO,
 	Net.REQUEST_LEADERBOARD,
+	Net.SEND_FEEDBACK,
 	Net.MATCH_EVENT,
 }
 

@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Palette = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Palette"))
 local MatchService = require(script.MatchService)
+local ClosedTest = require(script.ClosedTest)
 
 -- Night-time neon look. Lighting.Technology cannot be set from a script:
 -- set it to Future in Studio (Lighting > Technology) for the best result.
@@ -49,4 +50,5 @@ local function setupLighting()
 end
 
 setupLighting()
+ClosedTest.start()
 MatchService.start()

@@ -25,6 +25,7 @@ export type Data = {
 	leaves: number, -- ranked matches abandoned, ever
 	leaveBanUntil: number, -- os.time() until which ranked play is blocked for leaving too often
 	season: number,
+	tutorialDone: boolean,
 }
 
 local cache: { [number]: Data } = {}
@@ -42,6 +43,7 @@ local function fresh(): Data
 		leaves = 0,
 		leaveBanUntil = 0,
 		season = PlayerData.SEASON,
+		tutorialDone = false,
 	}
 end
 

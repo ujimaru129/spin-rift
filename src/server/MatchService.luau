@@ -27,9 +27,13 @@ local Leaderboard = require(script.Parent.Leaderboard)
 local RankedQueue = require(script.Parent.RankedQueue)
 local RankedResult = require(script.Parent.RankedResult)
 local RankedRoom = require(script.Parent.RankedRoom)
+local Analytics = require(script.Parent.Analytics)
+local Feedback = require(script.Parent.Feedback)
 
 local ONLINE = "Online" -- casual match with someone in this server
 local RANKED = "Ranked"
+local TUTORIAL = "Tutorial"
+local TUTORIAL_RETURNS = 3 -- returns needed in the first tutorial step
 local ARENA_SPACING = 400 -- studs between arenas
 local AUTO_SERVE_AFTER = 5 -- seconds a player may wait before their serve goes in automatically
 local MIN_SWING_GAP = 0.15 -- ignore button mashing faster than this
@@ -54,6 +58,7 @@ type Session = {
 	match: Match.Match,
 	seats: { Seat },
 	onOver: ((winner: number, reason: string?) -> ())?,
+	tutorial: { step: string, returns: number }?,
 }
 
 local MatchService = {}
@@ -164,9 +169,79 @@ local function applyAbility(session: Session, e: Match.Event)
 	end
 end
 
+-- Tutorial: 3 returns, then a PERFECT, then an ability. Points do not count.
+local function advanceTutorial(session: Session, events: { Match.Event })
+	local tut = session.tutorial
+	local player = session.seats[1].player
+	if not tut or not player then
+		return
+	end
+	local m = session.match
+	local before = tut.step .. tut.returns
+	for _, e in events do
+		if e.kind == "Swing" and e.player == 1 and e.grade ~= "Miss" then
+			tut.returns += 1
+			if tut.returns == 1 then
+				Analytics.funnel(player, "FirstReturn")
+			end
+			if e.grade == "Perfect" then
+				Analytics.funnel(player, "FirstPerfect")
+			end
+			-- one step per return, so every instruction is shown
+			if tut.step == "hit" and tut.returns >= TUTORIAL_RETURNS then
+				tut.step = "perfect"
+			elseif tut.step == "perfect" and e.grade == "Perfect" then
+				tut.step = "ability"
+			end
+		elseif e.kind == "Ability" and e.player == 1 and (e.state == "fired" or e.state == "used") then
+			Analytics.funnel(player, "FirstAbility")
+			if tut.step == "ability" then
+				tut.step = "done"
+				Analytics.funnel(player, "TutorialDone")
+				task.spawn(function()
+					PlayerData.update(player.UserId, function(d)
+						d.tutorialDone = true
+					end)
+				end)
+			end
+		elseif e.kind == "Point" then
+			m.points = { 0, 0 }
+		end
+	end
+	if tut.step == "ability" and m.gauge[1] < Config.Gauge.max then
+		-- keep the gauge full so the player can try an ability right away
+		m.gauge[1] = Config.Gauge.max
+		send(session, m:snapshot())
+	end
+	if tut.step .. tut.returns ~= before then
+		send(session, { kind = "Tutorial", step = tut.step, left = math.max(TUTORIAL_RETURNS - tut.returns, 0) })
+	end
+end
+
+local function logMatchOver(session: Session, e: Match.Event)
+	for _, seat in session.seats do
+		local p = seat.player
+		if p and not seat.left then
+			Analytics.event(p, "MatchFinished", 1, { session.mode, if e.winner == seat.index then "win" else "loss" })
+			Analytics.funnel(p, "FirstMatchFinished")
+			if session.mode == RANKED then
+				Analytics.funnel(p, "FirstRankedFinished")
+			end
+		end
+	end
+end
+
 local function dispatch(session: Session, events: { Match.Event })
 	local pointEnded = false
 	for _, e in events do
+		if e.kind == "Ability" and (e.state == "used" or e.state == "fired") then
+			local p = session.seats[e.player].player
+			if p then
+				Analytics.event(p, "AbilityUsed", 1, { e.id, session.mode })
+			end
+		elseif e.kind == "MatchOver" then
+			logMatchOver(session, e)
+		end
 		if e.kind == "Ability" then
 			applyAbility(session, e)
 		end
@@ -190,6 +265,9 @@ local function dispatch(session: Session, events: { Match.Event })
 		end
 	end
 	local m = session.match
+	if session.tutorial then
+		advanceTutorial(session, events)
+	end
 	if pointEnded and m.phase == "Paused" then
 		send(session, { kind = "ServeWait", server = m.server, at = m.nextServeAt })
 	end
@@ -218,11 +296,8 @@ local function destroy(session: Session)
 	end
 end
 
-local function seatName(seat: Seat, mode: string): string
-	if seat.player then
-		return seat.player.DisplayName
-	end
-	return if mode == "Wall" then "WALL" else "BOT（" .. (Bot.Profiles :: any)[mode].label .. "）"
+local function seatName(seat: Seat): string
+	return if seat.player then seat.player.DisplayName else ""
 end
 
 local function begin(
@@ -259,7 +334,9 @@ local function begin(
 				mode = mode,
 				you = seat.index,
 				side = Match.sideOf(seat.index),
-				opponent = seatName(other, mode),
+				opponent = seatName(other),
+				-- a Bot opponent's level ("Wall", "Easy", …); clients turn it into words
+				opponentMode = if other.bot then (if mode == TUTORIAL then "Wall" else mode) else nil,
 				origin = origin,
 				loadout = seat.loadout,
 				opponentLoadout = other.loadout,
@@ -290,17 +367,25 @@ local function botLoadout(mode: string, rng: Random): { string }
 end
 
 local function startPractice(player: Player, mode: string, loadout: { string })
+	local tutorial = mode == TUTORIAL
+	local botMode = if tutorial then "Wall" else mode
 	local rng = Random.new()
-	local bl = botLoadout(mode, rng)
-	local bot = Bot.new(mode, Match.sideOf(2), function(a, b)
+	local bl = botLoadout(botMode, rng)
+	local bot = Bot.new(botMode, Match.sideOf(2), function(a, b)
 		return rng:NextNumber(a, b)
 	end, bl)
 	local seats = {
-		humanSeat(1, player, loadout),
+		humanSeat(1, player, if tutorial then { "Curve", "Barrier" } else loadout),
 		{ index = 2, bot = bot, lastSwing = 0, left = false, loadout = bl } :: Seat,
 	}
 	-- the player serves first against the wall, the Bot serves first in a match
-	begin(mode, seats, if mode == "Wall" then 1 else 2)
+	begin(mode, seats, if botMode == "Wall" then 1 else 2)
+	local session = byPlayer[player]
+	if tutorial and session then
+		session.tutorial = { step = "hit", returns = 0 }
+		Analytics.funnel(player, "TutorialStarted")
+		send(session, { kind = "Tutorial", step = "hit", left = TUTORIAL_RETURNS })
+	end
 end
 
 local function removeFromQueue(player: Player)
@@ -350,6 +435,7 @@ local function sendProfile(player: Player)
 		region = region,
 		regionName = Regions.Names[region],
 		placement = math.max(0, Rating.PLACEMENT_GAMES - data.games),
+		tutorialDone = data.tutorialDone,
 	})
 end
 
@@ -404,7 +490,7 @@ local function request(player: Player, mode: unknown, loadout: unknown)
 	if type(mode) ~= "string" then
 		return
 	end
-	if mode ~= ONLINE and mode ~= RANKED and not (Bot.Profiles :: any)[mode] then
+	if mode ~= ONLINE and mode ~= RANKED and mode ~= TUTORIAL and not (Bot.Profiles :: any)[mode] then
 		return
 	end
 	leave(player)
@@ -414,6 +500,7 @@ local function request(player: Player, mode: unknown, loadout: unknown)
 			return
 		end
 		local ok, reason = RankedQueue.join(player, chosen)
+		Analytics.event(player, "RankedQueued", 1, { if ok then "ok" else tostring(reason) })
 		if ok then
 			fire(player, { kind = "Queued", ranked = true })
 		else
@@ -569,6 +656,7 @@ function MatchService.start()
 	Net.get(Net.SWING).OnServerEvent:Connect(onSwing)
 	Net.get(Net.USE_ABILITY).OnServerEvent:Connect(onAbility)
 	Net.get(Net.HELLO).OnServerEvent:Connect(function(player)
+		Analytics.funnel(player, "Joined")
 		task.spawn(function()
 			PlayerData.load(player.UserId)
 			if player.Parent then
@@ -577,6 +665,11 @@ function MatchService.start()
 					fire(player, { kind = "RoomWaiting" })
 				end
 			end
+		end)
+	end)
+	Net.get(Net.SEND_FEEDBACK).OnServerEvent:Connect(function(player, category, text, locale)
+		task.spawn(function()
+			fire(player, { kind = "FeedbackResult", status = Feedback.submit(player, category, text, locale) })
 		end)
 	end)
 	Net.get(Net.REQUEST_LEADERBOARD).OnServerEvent:Connect(function(player, scope: unknown)

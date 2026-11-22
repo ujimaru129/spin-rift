@@ -7,7 +7,8 @@
 - [フェーズ1 手触りの試作](docs/phase1.md)
 - [フェーズ2 オンライン対戦](docs/phase2.md)
 - [フェーズ3 特殊能力](docs/phase3.md)
-- いまのフェーズ：[フェーズ4 ランク戦とマッチング](docs/phase4.md)
+- [フェーズ4 ランク戦とマッチング](docs/phase4.md)
+- いまのフェーズ：[フェーズ5 クローズドテスト](docs/phase5.md)
 
 ## 開発環境のセットアップ
 
@@ -44,6 +45,7 @@ VS Code を使う場合は `.vscode/extensions.json` の推奨拡張（Rojo、lu
 | placeファイルを書き出す | `rojo build -o SpinRift.rbxl` |
 | テスト（Lune） | `lune run tests/run` |
 | 能力のバランスを測る | `lune run tools/balance 80` |
+| 公開中のゲームの感想を読む | `ROBLOX_API_KEY=... lune run tools/feedback <ユニバースID> [out.csv]` |
 | 整形 | `stylua src tests` |
 | Lint | `selene src` |
 
@@ -51,7 +53,7 @@ VS Code を使う場合は `.vscode/extensions.json` の推奨拡張（Rojo、lu
 
 | フォルダ | Roblox上の場所 | 内容 |
 | --- | --- | --- |
-| `src/shared` | `ReplicatedStorage.Shared` | サーバー・クライアント共通。`Rally` が試合のルール、`Rank` がレートとマッチングのルール |
+| `src/shared` | `ReplicatedStorage.Shared` | サーバー・クライアント共通。`Rally` が試合のルール、`Rank` がレートとマッチングのルール、`Strings` が画面の文言（日本語・英語） |
 | `src/server` | `ServerScriptService.Server` | 試合の進行（`MatchService`）、アリーナ（`Arena`）、ランク戦（`RankedQueue`・`RankedRoom`・`RankedResult`）、成績の保存（`PlayerData`）、ランキング（`Leaderboard`） |
 | `src/client` | `StarterPlayer.StarterPlayerScripts.Client` | 操作、カメラ、ボールの描画（`BallView`）、画面のUI（`Hud`） |
 

@@ -1,22 +1,28 @@
 --!strict
--- Client entry point: input, camera, ball drawing and HUD for practice and online matches.
+-- Client entry point: input, camera, ball drawing and HUD for every mode.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local LocalizationService = game:GetService("LocalizationService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Rally"):WaitForChild("Config"))
 local Abilities = require(Shared:WaitForChild("Rally"):WaitForChild("Abilities"))
 local Net = require(Shared:WaitForChild("Net"))
 local Palette = require(Shared:WaitForChild("Palette"))
+local Matchmaker = require(Shared:WaitForChild("Rank"):WaitForChild("Matchmaker"))
+local S = require(Shared:WaitForChild("Strings"))
 local BallView = require(script.BallView)
 local Hud = require(script.Hud)
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
+
+-- Japanese for Japanese locales, English for everyone else; the menu button switches it.
+S.setLocale(S.fromLocaleId(LocalizationService.RobloxLocaleId))
 
 local requestRemote = Net.get(Net.REQUEST_MATCH)
 local leaveRemote = Net.get(Net.LEAVE_MATCH)
@@ -24,6 +30,7 @@ local swingRemote = Net.get(Net.SWING)
 local abilityRemote = Net.get(Net.USE_ABILITY)
 local helloRemote = Net.get(Net.HELLO)
 local leaderboardRemote = Net.get(Net.REQUEST_LEADERBOARD)
+local feedbackRemote = Net.get(Net.SEND_FEEDBACK)
 local matchEvent = Net.get(Net.MATCH_EVENT)
 
 local ball = BallView.new()
@@ -128,6 +135,13 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 	onLeaderboard = function(scope: string)
 		leaderboardRemote:FireServer(scope)
 	end,
+	onLanguage = function()
+		S.setLocale(if S.locale() == "ja" then "en" else "ja")
+		hud:relabel()
+	end,
+	onFeedback = function(category: string, text: string)
+		feedbackRemote:FireServer(category, text, S.locale())
+	end,
 })
 hud:showMenu()
 
@@ -168,25 +182,42 @@ end
 
 local function serveHint(server: number)
 	if server == me then
-		hud:setHint(
-			if UserInputService.TouchEnabled
-				then "あなたのサーブ：「打つ」をタップ"
-				else "あなたのサーブ：クリックかスペース"
-		)
+		hud:setHint(S.t(if UserInputService.TouchEnabled then "hint.serveTouch" else "hint.serve"))
 	else
-		hud:setHint("相手のサーブ")
+		hud:setHint(S.t("hint.theirServe"))
 	end
 end
 
-local REASON = { miss = "取れなかった", whiff = "空振り", reach = "届かなかった" }
+-- "23s  rating ±150, your region"
+local function searchText(waited: number): string
+	local w = Matchmaker.window(waited)
+	local diff = if w.maxDiff == math.huge then S.t("search.anyDiff") else S.t("search.diff", { n = w.maxDiff })
+	return S.t(
+		"wait.rankedStatus",
+		{ seconds = math.floor(waited), search = diff .. " / " .. S.t("search." .. w.regions) }
+	)
+end
 
-local DENIED = {
-	gauge = "ゲージが足りない",
-	used = "このラリーではもう能力を使った",
-	notRally = "ラリー中に使える",
-	noBall = "自分に向かってくる球があるときに使える",
-	active = "もう発動している",
-}
+local function opponentLabel(e: { [string]: any }): string
+	local mode = e.opponentMode
+	if mode == "Wall" then
+		return S.t("opponent.wall")
+	elseif mode then
+		return S.t("opponent.bot", { level = S.t("level." .. mode) })
+	end
+	return e.opponent
+end
+
+local tutorialStep: string? = nil
+local function showTutorial(step: string, left: number)
+	tutorialStep = step
+	local key = if step == "hit"
+		then "tut.hit"
+		elseif step == "perfect" then "tut.perfect"
+		elseif step == "ability" then "tut.ability"
+		else "tut.done"
+	hud:setTutorial(S.t(key, { n = left }))
+end
 
 local function refreshSlots()
 	local states = {}
@@ -212,18 +243,17 @@ local function clearBarrier(index: number)
 end
 
 local function abilityName(id: string): string
-	local def = Abilities.get(id)
-	return if def then def.name else id
+	return S.abilityName(id)
 end
 
 local function onAbilityEvent(e: { [string]: any })
 	local mine = e.player == me
 	local color = Hud.abilityColor(e.id)
-	local who = if mine then "" else "相手："
+	local who = if mine then "" else S.t("ability.them")
 	if e.state == "armed" then
 		if mine then
 			armedId = e.id
-			hud:setHint(`{abilityName(e.id)}：次の返球で発動`)
+			hud:setHint(S.t("hint.armed", { ability = abilityName(e.id) }))
 		end
 	elseif e.state == "disarmed" then
 		if mine then
@@ -233,10 +263,10 @@ local function onAbilityEvent(e: { [string]: any })
 	elseif e.state == "fizzled" then
 		if mine then
 			armedId = nil
-			hud:setHint("ゲージが足りず、能力は発動しなかった")
+			hud:setHint(S.t("hint.fizzled"))
 		end
 	elseif e.state == "fired" or e.state == "used" then
-		hud:announceAbility(`{who}{abilityName(e.id)}！`, color)
+		hud:announceAbility(S.t("ability.used", { who = who, ability = abilityName(e.id) }), color)
 		if mine then
 			armedId = nil
 			usedThisRally = true
@@ -260,7 +290,7 @@ local function onAbilityEvent(e: { [string]: any })
 			end
 		end
 	elseif e.state == "triggered" then
-		hud:announceAbility(`{who}リフトバリア発動！`, color)
+		hud:announceAbility(S.t("ability.barrierFired", { who = who }), color)
 		clearBarrier(e.player)
 	elseif e.state == "expired" then
 		clearBarrier(e.player)
@@ -281,44 +311,32 @@ local function onEvent(e: { [string]: any })
 	if kind == "Queued" then
 		hud:setMenuNote("")
 		if e.ranked then
-			hud:showWaiting({
-				title = "ランク戦の相手を探しています…",
-				sub = "近いレートの相手を探しています",
-			})
+			hud:showWaiting({ title = S.t("wait.ranked"), sub = S.t("wait.rankedSub") })
 		else
 			hud:showWaiting()
 		end
 	elseif kind == "RankQueue" then
-		hud:showWaiting({
-			title = "ランク戦の相手を探しています…",
-			sub = `{math.floor(e.waited)}秒  {e.search}`,
-			bot = e.botOffer,
-		})
+		hud:showWaiting({ title = S.t("wait.ranked"), sub = searchText(e.waited), bot = e.botOffer })
 	elseif kind == "Teleporting" then
-		hud:showWaiting({ title = "対戦部屋へ移動しています…", cancel = false })
+		hud:showWaiting({ title = S.t("wait.teleporting"), cancel = false })
 	elseif kind == "RoomWaiting" then
-		hud:showWaiting({
-			title = "相手の到着を待っています…",
-			sub = "ランク戦の部屋です",
-			cancel = false,
-		})
+		hud:showWaiting({ title = S.t("wait.room"), sub = S.t("wait.roomSub"), cancel = false })
 	elseif kind == "RankDenied" then
 		hud:showMenu()
-		hud:setMenuNote(
-			if e.reason == "banned"
-				then "試合を途中で抜けた回数が多いため、しばらくランク戦に参加できません"
-				else "今はランク戦に参加できません"
-		)
+		hud:setMenuNote(S.t(if e.reason == "banned" then "menu.banned" else "menu.rankedUnavailable"))
 	elseif kind == "RankCancelled" then
 		endMatchView()
 		hud:showMenu()
-		hud:setMenuNote(
-			if e.reason == "noshow"
-				then "相手が来なかったため、試合は中止になりました（レートは変わりません）"
-				else "ランク戦の部屋に移動できませんでした。もう一度お試しください"
-		)
+		hud:setMenuNote(S.t(if e.reason == "noshow" then "menu.noShow" else "menu.teleportFailed"))
 	elseif kind == "Profile" then
 		hud:setProfile(e)
+		if not e.tutorialDone and hud.menuNote.Text == "" then
+			hud:setMenuNote(S.t("menu.tryTutorial"), true)
+		end
+	elseif kind == "FeedbackResult" then
+		hud:feedbackResult(e.status)
+	elseif kind == "Tutorial" then
+		showTutorial(e.step, e.left)
 	elseif kind == "Leaderboard" then
 		hud:showLeaderboard(e.scope, e.rows)
 	elseif kind == "RankResult" then
@@ -334,7 +352,8 @@ local function onEvent(e: { [string]: any })
 		clearBarrier(2)
 		ball:setOrigin(e.origin)
 		ball:hide()
-		hud:showMatch(e.opponent)
+		tutorialStep = nil
+		hud:showMatch(opponentLabel(e))
 		hud:setSlots(myLoadout)
 		refreshSlots()
 		local theirs = e.opponentLoadout or {}
@@ -343,7 +362,7 @@ local function onEvent(e: { [string]: any })
 			for _, id in theirs do
 				table.insert(names, abilityName(id))
 			end
-			hud:announceAbility("相手の能力：" .. table.concat(names, "・"), Palette.TeamB)
+			hud:announceAbility(S.t("ability.theirLoadout", { list = table.concat(names, " / ") }), Palette.TeamB)
 		end
 		camera.CameraType = Enum.CameraType.Scriptable
 		camera.FieldOfView = 52
@@ -369,13 +388,14 @@ local function onEvent(e: { [string]: any })
 		onAbilityEvent(e)
 	elseif kind == "AbilityDenied" then
 		if e.player == me then
-			hud:setHint(DENIED[e.reason] or "今は使えない")
+			local key = "denied." .. tostring(e.reason)
+			hud:setHint(S.t(if S.has(key) then key else "denied.other"))
 		end
 	elseif kind == "Swing" then
 		if e.player == me then
 			hud:popupGrade(e.grade, e.offset)
 			if e.protected then
-				hud:setHint("バリアが守ってくれる！")
+				hud:setHint(S.t("hint.protected"))
 			end
 			if e.grade ~= "Miss" then
 				ball:hitEffect(e.grade)
@@ -400,23 +420,22 @@ local function onEvent(e: { [string]: any })
 		clearBarrier(2)
 		refreshSlots()
 		local mine = e.winner == me
+		local reasonKey = "point." .. tostring(e.reason)
 		hud:popupText(
-			if mine then "POINT!" else (REASON[e.reason] or "失点"),
+			S.t(if mine then "point.you" elseif S.has(reasonKey) then reasonKey else "point.lost"),
 			if mine then Palette.TeamA else Palette.Grade.Miss
 		)
 		hud:setRally(0)
 	elseif kind == "Game" then
-		hud:popupText(
-			if e.winner == me then "ゲーム獲得！" else "ゲームを落とした",
-			Palette.Grade.Perfect
-		)
+		hud:popupText(S.t(if e.winner == me then "game.won" else "game.lost"), Palette.Grade.Perfect)
 	elseif kind == "MatchOver" then
-		local note = if e.reason == "forfeit" and e.winner == me then "相手が退出しました" else nil
+		local note = if e.reason == "forfeit" and e.winner == me then S.t("result.forfeit") else nil
 		ball:hide()
 		hud:showResult(e.winner == me, e.games[me], e.games[them()], note)
 	elseif kind == "Left" then
 		clearBarrier(1)
 		clearBarrier(2)
+		tutorialStep = nil
 		endMatchView()
 		hud:showMenu()
 	end

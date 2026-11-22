@@ -508,5 +508,151 @@ return function(loader, expect)
 				guest.Parent = nil
 			end,
 		},
+		{
+			"every text has Japanese and English, and the HUD redraws in English",
+			function()
+				local S = loader.require("src/shared/Strings")
+				expect(#S.missing()).toBe(0)
+				expect(S.fromLocaleId("ja-jp")).toBe("ja")
+				expect(S.fromLocaleId("en-us")).toBe("en")
+				expect(S.fromLocaleId("pt-br")).toBe("en")
+				S.setLocale("en")
+				expect(S.t("hud.rally", { n = 5 })).toBe("Rally 5")
+				expect(S.rank("Gold", "II")).toBe("Gold II")
+				local hud = newHud()
+				expect(string.find(hud.pickInfo.Text, "Curve Shot") ~= nil).toBeTruthy()
+				expect(hud.pickChips.Barrier.Text).toBe("Rift Barrier  8")
+				S.setLocale("ja")
+				hud:relabel()
+				expect(hud.pickChips.Barrier.Text).toBe("リフトバリア  8")
+				expect(string.find(hud.pickInfo.Text, "カーブショット") ~= nil).toBeTruthy()
+			end,
+		},
+		{
+			"the tutorial walks a new player through returns, a PERFECT and an ability",
+			function()
+				local Analytics = loader.require("src/server/Analytics")
+				local RunService = globals.game:GetService("RunService")
+				local UserInputService = globals.game:GetService("UserInputService")
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local me = Fake.localPlayer
+				local myRoot = me.Character:FindFirstChild("HumanoidRootPart")
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				remotes.RequestMatch:FireServer("Tutorial", {})
+				local start, incoming, serveAt
+				local steps = {}
+				local read = 0
+				local pressedQ = false
+				local click =
+					{ UserInputType = roblox.Enum.UserInputType.MouseButton1, KeyCode = roblox.Enum.KeyCode.F }
+				for _ = 1, 60 * 120 do
+					Fake.clock.now += 1 / 60
+					RunService.Heartbeat:Fire(1 / 60)
+					RunService.RenderStepped:Fire(1 / 60)
+					for i = read + 1, #seen do
+						local e = seen[i]
+						if e.kind == "Start" then
+							start = e
+						elseif e.kind == "Tutorial" then
+							table.insert(steps, e.step)
+						elseif e.kind == "Shot" and start then
+							incoming = if e.shot.hitterSide ~= start.side then e.shot else nil
+							if incoming then
+								myRoot.CFrame =
+									roblox.CFrame.new(start.origin + Vector3.new(start.side * 14, 3.5, incoming.to.Z))
+								if steps[#steps] == "ability" and not pressedQ then
+									pressedQ = true
+									UserInputService.InputBegan:Fire(
+										{
+											UserInputType = roblox.Enum.UserInputType.Keyboard,
+											KeyCode = roblox.Enum.KeyCode.Q,
+										},
+										false
+									)
+								end
+							end
+						elseif e.kind == "ServeWait" and start then
+							serveAt = if e.server == start.you then e.at else nil
+						end
+					end
+					read = #seen
+					if incoming and Fake.clock.now >= Trajectory.arrivalTime(incoming) - 0.005 then
+						incoming = nil
+						UserInputService.InputBegan:Fire(click, false)
+					end
+					if serveAt and Fake.clock.now >= serveAt + 0.1 then
+						serveAt = nil
+						UserInputService.InputBegan:Fire(click, false)
+					end
+					if steps[#steps] == "done" then
+						break
+					end
+				end
+				expect(start.opponentMode).toBe("Wall")
+				expect(table.concat(steps, ",")).toBe("hit,hit,hit,perfect,ability,done")
+				expect(Fake.dataStores.PlayerData_v1["u_" .. me.UserId].tutorialDone).toBe(true)
+				local funnel = {}
+				for _, l in Analytics.log do
+					if l.kind == "funnel" then
+						funnel[l.name] = true
+					end
+				end
+				for _, step in
+					{ "Joined", "TutorialStarted", "FirstReturn", "FirstPerfect", "FirstAbility", "TutorialDone" }
+				do
+					if not funnel[step] then
+						error("funnel step not logged: " .. step)
+					end
+				end
+				remotes.LeaveMatch:FireServer()
+			end,
+		},
+		{
+			"feedback is saved for the developers, at most once a minute per player",
+			function()
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				remotes.SendFeedback:FireServer("bug", "サーブのあとにボールが消えた", "ja")
+				expect(seen[#seen].kind).toBe("FeedbackResult")
+				expect(seen[#seen].status).toBe("ok")
+				local stored = nil
+				for _, v in Fake.dataStores.Feedback_v1 do
+					stored = v
+				end
+				expect(stored.category).toBe("bug")
+				expect(stored.text).toBe("サーブのあとにボールが消えた")
+				remotes.SendFeedback:FireServer("fun", "楽しい", "ja")
+				expect(seen[#seen].status).toBe("tooSoon")
+				remotes.SendFeedback:FireServer("hack", "x", "ja")
+				expect(seen[#seen].status).toBe("invalid")
+			end,
+		},
+		{
+			"during the closed test only members of the tester group can stay",
+			function()
+				local ClosedTest = loader.require("src/server/ClosedTest")
+				ClosedTest.ENABLED = true
+				ClosedTest.GROUP_ID = 777
+				Fake.studio = false
+				local outsider = globals.Instance.new("Player")
+				expect(ClosedTest.admit(outsider)).toBe(false)
+				expect(string.find(outsider.__kicked, "クローズドテスト") ~= nil).toBeTruthy()
+				expect(string.find(outsider.__kicked, "closed test") ~= nil).toBeTruthy()
+				local tester = globals.Instance.new("Player")
+				tester.__groups = { [777] = 1 }
+				expect(ClosedTest.admit(tester)).toBe(true)
+				Fake.studio = true
+				expect(ClosedTest.admit(outsider)).toBe(true) -- Studio is never blocked
+				ClosedTest.ENABLED = false
+			end,
+		},
 	}
 end

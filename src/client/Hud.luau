@@ -1,5 +1,7 @@
 --!strict
--- Screen UI: mode menu, scoreboard, gauge, hit-timing popups, result panel and the touch button.
+-- Screen UI: menu (modes, ability picker, rank, leaderboard, feedback, language), waiting screens,
+-- the match HUD (scoreboard, gauge, ability slots, timing popups, tutorial line) and results.
+-- Every word comes from Strings, so the whole UI can switch between Japanese and English.
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,13 +10,17 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Palette = require(Shared:WaitForChild("Palette"))
 local Abilities = require(Shared:WaitForChild("Rally"):WaitForChild("Abilities"))
+local Rating = require(Shared:WaitForChild("Rank"):WaitForChild("Rating"))
+local S = require(Shared:WaitForChild("Strings"))
 
 local FONT = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
 local FONT_REGULAR = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
 local PANEL = Color3.fromRGB(8, 11, 22)
+local FIELD = Color3.fromRGB(16, 22, 40)
 local INK = Color3.fromRGB(238, 243, 255)
 local INK_DIM = Color3.fromRGB(154, 166, 196)
 local GAUGE_MAX = 10
+local FEEDBACK_CATEGORIES = { "fun", "bug", "balance", "other" }
 
 export type Callbacks = {
 	onMode: (mode: string) -> (),
@@ -23,9 +29,12 @@ export type Callbacks = {
 	onSwingButton: () -> (),
 	onAbility: (slot: number) -> (),
 	onLeaderboard: (scope: string) -> (),
+	onLanguage: () -> (),
+	onFeedback: (category: string, text: string) -> (),
 }
 
 export type Slot = { frame: TextButton, name: TextLabel, cost: TextLabel, key: TextLabel, stroke: UIStroke }
+type Bound = { inst: any, key: string, prop: string }
 
 local function abilityColor(id: string): Color3
 	local def = Abilities.get(id)
@@ -39,24 +48,33 @@ Hud.abilityColor = abilityColor
 export type Hud = typeof(setmetatable(
 	{} :: {
 		gui: ScreenGui,
-		menu: Frame,
-		match: Frame,
-		result: Frame,
+		bound: { Bound },
+		menu: ScrollingFrame,
+		profile: TextLabel,
+		menuNote: TextLabel,
+		pickChips: { [string]: TextButton },
+		pickInfo: TextLabel,
+		pickFocus: string?,
+		loadout: { string },
+		lastProfile: { [string]: any }?,
+		leaderboard: Frame,
+		boardTitle: TextLabel,
+		boardRows: { TextLabel },
+		boardTabs: { TextButton },
+		boardRegion: string,
+		lastBoard: { scope: string, rows: { { [string]: any } } }?,
+		feedback: Frame,
+		fbCategory: string,
+		fbCats: { [string]: TextButton },
+		fbBox: TextBox,
+		fbStatus: TextLabel,
 		waiting: Frame,
 		waitTitle: TextLabel,
 		waitSub: TextLabel,
 		waitBot: TextButton,
 		waitCancel: TextButton,
-		profile: TextLabel,
-		menuNote: TextLabel,
-		board: Frame,
-		boardTitle: TextLabel,
-		boardRows: { TextLabel },
-		boardTabs: { TextButton },
-		boardRegion: string,
-		rankLine: TextLabel,
-		ping: TextLabel,
-		resultNote: TextLabel,
+		match: Frame,
+		scoreboard: Frame,
 		myPoints: TextLabel,
 		theirPoints: TextLabel,
 		theirName: TextLabel,
@@ -65,22 +83,32 @@ export type Hud = typeof(setmetatable(
 		myServe: Frame,
 		theirServe: Frame,
 		rally: TextLabel,
+		ping: TextLabel,
 		gaugeCells: { Frame },
 		popup: TextLabel,
 		popupSub: TextLabel,
 		hint: TextLabel,
-		resultTitle: TextLabel,
-		resultScore: TextLabel,
-		touchButton: TextButton?,
-		loadout: { string },
-		pickChips: { [string]: TextButton },
-		pickInfo: TextLabel,
+		tutorial: TextLabel,
+		announce: TextLabel,
 		slots: { Slot },
 		slotIds: { string },
-		announce: TextLabel,
+		touchButton: TextButton?,
+		result: Frame,
+		resultTitle: TextLabel,
+		resultScore: TextLabel,
+		resultNote: TextLabel,
+		rankLine: TextLabel,
 	},
 	Hud
 ))
+
+-- Elements in a vertical list are ordered by creation.
+local nextOrder = 0
+local function ordered<T>(x: T): T
+	nextOrder += 1
+	(x :: any).LayoutOrder = nextOrder
+	return x
+end
 
 local function corner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -107,7 +135,7 @@ local function label(parent: Instance, text: string, size: number, color: Color3
 	l.Size = UDim2.new(1, 0, 0, size + 6)
 	l.TextWrapped = true
 	l.Parent = parent
-	return l
+	return ordered(l)
 end
 
 local function panel(parent: Instance, name: string): Frame
@@ -125,7 +153,7 @@ end
 local function button(parent: Instance, text: string, accent: Color3, onClick: () -> ()): TextButton
 	local b = Instance.new("TextButton")
 	b.AutoButtonColor = true
-	b.BackgroundColor3 = Color3.fromRGB(16, 22, 40)
+	b.BackgroundColor3 = FIELD
 	b.BorderSizePixel = 0
 	b.Text = text
 	b.TextSize = 18
@@ -136,7 +164,7 @@ local function button(parent: Instance, text: string, accent: Color3, onClick: (
 	corner(b, 6)
 	stroke(b, accent, 0.25)
 	b.Activated:Connect(onClick)
-	return b
+	return ordered(b)
 end
 
 local function vlist(parent: Instance, padding: number)
@@ -154,151 +182,216 @@ local function vlist(parent: Instance, padding: number)
 	p.Parent = parent
 end
 
+local function row(parent: Instance, height: number): Frame
+	local f = Instance.new("Frame")
+	f.BackgroundTransparency = 1
+	f.Size = UDim2.new(1, 0, 0, height)
+	f.Parent = parent
+	local l = Instance.new("UIListLayout")
+	l.FillDirection = Enum.FillDirection.Horizontal
+	l.Padding = UDim.new(0, 6)
+	l.SortOrder = Enum.SortOrder.LayoutOrder
+	l.Parent = f
+	return ordered(f)
+end
+
+local function grid(parent: Instance, rows: number): Frame
+	local f = Instance.new("Frame")
+	f.BackgroundTransparency = 1
+	f.Size = UDim2.new(1, 0, 0, rows * 36 + (rows - 1) * 6)
+	f.Parent = parent
+	local g = Instance.new("UIGridLayout")
+	g.CellSize = UDim2.new(0.5, -3, 0, 36)
+	g.CellPadding = UDim2.fromOffset(6, 6)
+	g.SortOrder = Enum.SortOrder.LayoutOrder
+	g.Parent = f
+	return ordered(f)
+end
+
+local function centered(f: GuiObject, width: number)
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromScale(0.5, 0.5)
+	f.Size = UDim2.new(0, width, 0, 0)
+	f.AutomaticSize = Enum.AutomaticSize.Y
+end
+
 function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
+	local bound: { Bound } = {}
+	-- fixed text, redrawn when the language changes
+	local function bind<T>(inst: T, key: string, prop: string?): T
+		local p = prop or "Text"
+		(inst :: any)[p] = S.t(key)
+		table.insert(bound, { inst = inst, key = key, prop = p })
+		return inst
+	end
+
 	local gui = Instance.new("ScreenGui")
-	gui.Name = "SpinRiftHud"
+	gui.Name = "SuperBattlePingPongHud"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-	-- menu
-	local menu = panel(gui, "Menu")
+	-- menu: scrolls when the screen is short
+	local menu = Instance.new("ScrollingFrame")
+	menu.Name = "Menu"
+	menu.BackgroundColor3 = PANEL
+	menu.BackgroundTransparency = 0.2
+	menu.BorderSizePixel = 0
 	menu.AnchorPoint = Vector2.new(0.5, 0.5)
 	menu.Position = UDim2.fromScale(0.5, 0.5)
-	menu.Size = UDim2.new(0.94, 0, 0, 0)
+	menu.Size = UDim2.fromScale(0.94, 0.92)
+	menu.CanvasSize = UDim2.new()
+	menu.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	menu.ScrollBarThickness = 4
+	menu.Parent = gui
+	corner(menu, 8)
+	stroke(menu, Palette.TeamA, 0.6)
 	local menuMax = Instance.new("UISizeConstraint")
-	menuMax.MaxSize = Vector2.new(400, math.huge)
+	menuMax.MaxSize = Vector2.new(400, 860)
 	menuMax.Parent = menu
-	menu.AutomaticSize = Enum.AutomaticSize.Y
 	vlist(menu, 10)
+
 	local title = label(menu, "SUPER BATTLE\nPING-PONG!!", 30, Palette.TeamA)
 	title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
 	title.Size = UDim2.new(1, 0, 0, 68)
 	title.TextScaled = true
-	local profile = label(menu, "ランク：読み込み中…", 14, INK, FONT_REGULAR)
+	bind(label(menu, "", 12, INK_DIM, FONT_REGULAR), "menu.subtitle")
+	local profile = bind(label(menu, "", 14, INK, FONT_REGULAR), "menu.loadingRank")
+	profile.Size = UDim2.new(1, 0, 0, 36)
 	local menuNote = label(menu, "", 13, Palette.Grade.Miss, FONT_REGULAR)
+	menuNote.Size = UDim2.new(1, 0, 0, 36)
 	menuNote.Visible = false
-	button(menu, "ランク戦", Palette.Grade.Perfect, function()
-		callbacks.onMode("Ranked")
-	end)
-	button(menu, "カジュアル戦（このサーバーの人と）", Palette.TeamB, function()
-		callbacks.onMode("Online")
-	end)
-	local practiceTitle = label(menu, "練習", 13, INK_DIM, FONT)
-	practiceTitle.TextXAlignment = Enum.TextXAlignment.Left
-	local practice = Instance.new("Frame")
-	practice.BackgroundTransparency = 1
-	practice.Size = UDim2.new(1, 0, 0, 36 * 2 + 6)
-	practice.Parent = menu
-	local pg = Instance.new("UIGridLayout")
-	pg.CellSize = UDim2.new(0.5, -3, 0, 36)
-	pg.CellPadding = UDim2.fromOffset(6, 6)
-	pg.SortOrder = Enum.SortOrder.LayoutOrder
-	pg.Parent = practice
-	for order, m in
+
+	bind(
+		button(menu, "", Palette.Grade.Good, function()
+			callbacks.onMode("Tutorial")
+		end),
+		"menu.tutorial"
+	)
+	bind(
+		button(menu, "", Palette.Grade.Perfect, function()
+			callbacks.onMode("Ranked")
+		end),
+		"menu.ranked"
+	)
+	bind(
+		button(menu, "", Palette.TeamB, function()
+			callbacks.onMode("Online")
+		end),
+		"menu.casual"
+	)
+	bind(label(menu, "", 13, INK_DIM, FONT), "menu.practice").TextXAlignment = Enum.TextXAlignment.Left
+	local practice = grid(menu, 2)
+	for _, m in
 		{
-			{ "Wall", "壁打ち" },
-			{ "Easy", "Bot：やさしい" },
-			{ "Normal", "Bot：ふつう" },
-			{ "Hard", "Bot：つよい" },
+			{ "Wall", "menu.wall" },
+			{ "Easy", "menu.botEasy" },
+			{ "Normal", "menu.botNormal" },
+			{ "Hard", "menu.botHard" },
 		}
 	do
-		local b = button(practice, m[2], Palette.TeamA, function()
-			callbacks.onMode(m[1])
-		end)
-		b.LayoutOrder = order
+		local b = bind(
+			button(practice, "", Palette.TeamA, function()
+				callbacks.onMode(m[1])
+			end),
+			m[2]
+		)
 		b.TextSize = 15
 	end
-	-- ability picker
-	local pickTitle = label(menu, "能力を2つ選ぶ", 14, INK, FONT)
-	pickTitle.TextXAlignment = Enum.TextXAlignment.Left
-	local grid = Instance.new("Frame")
-	grid.BackgroundTransparency = 1
-	grid.Size = UDim2.new(1, 0, 0, 4 * 36 + 3 * 6)
-	grid.Parent = menu
-	local gl = Instance.new("UIGridLayout")
-	gl.CellSize = UDim2.new(0.5, -3, 0, 36)
-	gl.CellPadding = UDim2.fromOffset(6, 6)
-	gl.SortOrder = Enum.SortOrder.LayoutOrder
-	gl.Parent = grid
+
+	bind(label(menu, "", 14, INK, FONT), "menu.pick").TextXAlignment = Enum.TextXAlignment.Left
+	local picks = grid(menu, 4)
 	local pickInfo = label(menu, "", 12, INK_DIM, FONT_REGULAR)
 	pickInfo.Size = UDim2.new(1, 0, 0, 34)
 	pickInfo.TextXAlignment = Enum.TextXAlignment.Left
 	local pickChips: { [string]: TextButton } = {}
 
-	local help = label(
-		menu,
-		"移動：WASD・左スティック\n打つ：クリック・スペース・R2・画面の「打つ」\nコース：マウスの左右・右スティック・移動の向き\nボールが自分のラケットに来た瞬間に打つと PERFECT",
-		13,
-		INK_DIM,
-		FONT_REGULAR
-	)
+	local help = bind(label(menu, "", 13, INK_DIM, FONT_REGULAR), "menu.help")
 	help.Size = UDim2.new(1, 0, 0, 84)
 	help.TextXAlignment = Enum.TextXAlignment.Left
-	button(menu, "ランキングを見る", Palette.TeamA, function()
-		callbacks.onLeaderboard("GLOBAL")
-	end).Size =
-		UDim2.new(1, 0, 0, 36)
+
+	local extras = row(menu, 36)
 
 	-- leaderboard
-	local board = panel(gui, "Leaderboard")
-	board.AnchorPoint = Vector2.new(0.5, 0.5)
-	board.Position = UDim2.fromScale(0.5, 0.5)
-	board.Size = UDim2.new(0, 340, 0, 0)
-	board.AutomaticSize = Enum.AutomaticSize.Y
-	board.Visible = false
-	board.ZIndex = 5
-	vlist(board, 6)
-	local boardTitle = label(board, "ランキング", 20, Palette.Grade.Perfect)
-	local tabs = Instance.new("Frame")
-	tabs.BackgroundTransparency = 1
-	tabs.Size = UDim2.new(1, 0, 0, 32)
-	tabs.Parent = board
-	local tl = Instance.new("UIListLayout")
-	tl.FillDirection = Enum.FillDirection.Horizontal
-	tl.Padding = UDim.new(0, 6)
-	tl.Parent = tabs
+	local leaderboard = panel(gui, "Leaderboard")
+	centered(leaderboard, 340)
+	leaderboard.Visible = false
+	vlist(leaderboard, 6)
+	local boardTitle = bind(label(leaderboard, "", 20, Palette.Grade.Perfect), "board.title")
+	local tabs = row(leaderboard, 32)
 	local boardTabs: { TextButton } = {}
-	for i, text in { "世界", "地域" } do
-		local t = button(tabs, text, Palette.TeamA, function() end)
+	for i, key in { "board.world", "board.region" } do
+		local t = bind(button(tabs, "", Palette.TeamA, function() end), key)
 		t.Size = UDim2.new(0.5, -3, 1, 0)
 		t.TextSize = 14
 		boardTabs[i] = t
 	end
 	local boardRows: { TextLabel } = {}
 	for i = 1, 10 do
-		local r = label(board, "", 14, INK, FONT_REGULAR)
+		local r = label(leaderboard, "", 14, INK, FONT_REGULAR)
 		r.TextXAlignment = Enum.TextXAlignment.Left
-		r.LayoutOrder = 10 + i
 		boardRows[i] = r
 	end
-	local closeBoard = button(board, "閉じる", Palette.TeamB, function()
-		board.Visible = false
-	end)
-	closeBoard.LayoutOrder = 100
+	local closeBoard = bind(
+		button(leaderboard, "", Palette.TeamB, function()
+			leaderboard.Visible = false
+		end),
+		"common.close"
+	)
 	closeBoard.Size = UDim2.new(1, 0, 0, 36)
+
+	-- feedback form
+	local feedback = panel(gui, "Feedback")
+	centered(feedback, 340)
+	feedback.Visible = false
+	vlist(feedback, 8)
+	bind(label(feedback, "", 20, INK), "fb.title")
+	local cats = row(feedback, 30)
+	local fbCats: { [string]: TextButton } = {}
+	local fbBox = Instance.new("TextBox")
+	fbBox.ClearTextOnFocus = false
+	fbBox.MultiLine = true
+	fbBox.TextWrapped = true
+	fbBox.Text = ""
+	fbBox.TextSize = 14
+	fbBox.FontFace = FONT_REGULAR
+	fbBox.TextColor3 = INK
+	fbBox.PlaceholderColor3 = INK_DIM
+	fbBox.BackgroundColor3 = FIELD
+	fbBox.TextXAlignment = Enum.TextXAlignment.Left
+	fbBox.TextYAlignment = Enum.TextYAlignment.Top
+	fbBox.Size = UDim2.new(1, 0, 0, 96)
+	fbBox.Parent = feedback
+	ordered(fbBox)
+	corner(fbBox, 6)
+	bind(fbBox, "fb.placeholder", "PlaceholderText")
+	local fbStatus = label(feedback, "", 13, INK_DIM, FONT_REGULAR)
+	local fbSend = bind(button(feedback, "", Palette.Grade.Good, function() end), "fb.send")
+	local fbClose = bind(
+		button(feedback, "", Palette.TeamB, function()
+			feedback.Visible = false
+		end),
+		"common.close"
+	)
+	fbClose.Size = UDim2.new(1, 0, 0, 36)
 
 	-- waiting for an opponent
 	local waiting = panel(gui, "Waiting")
-	waiting.AnchorPoint = Vector2.new(0.5, 0.5)
-	waiting.Position = UDim2.fromScale(0.5, 0.5)
-	waiting.Size = UDim2.new(0, 320, 0, 0)
-	waiting.AutomaticSize = Enum.AutomaticSize.Y
+	centered(waiting, 340)
 	waiting.Visible = false
 	vlist(waiting, 10)
-	local waitTitle = label(waiting, "相手を待っています…", 22, INK)
+	local waitTitle = label(waiting, "", 22, INK)
 	local waitSub = label(waiting, "", 13, INK_DIM, FONT_REGULAR)
 	waitSub.Size = UDim2.new(1, 0, 0, 36)
-	local waitBot = button(
-		waiting,
-		"Bot と対戦する（レートは変わりません）",
-		Palette.Grade.Good,
-		function()
+	local waitBot = bind(
+		button(waiting, "", Palette.Grade.Good, function()
 			callbacks.onMode("Normal")
-		end
+		end),
+		"wait.bot"
 	)
+	waitBot.TextSize = 15
 	waitBot.Visible = false
-	local waitCancel = button(waiting, "キャンセル", Palette.TeamB, callbacks.onLeave)
+	local waitCancel = bind(button(waiting, "", Palette.TeamB, callbacks.onLeave), "common.cancel")
 
 	-- match HUD
 	local match = Instance.new("Frame")
@@ -308,17 +401,21 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	match.Visible = false
 	match.Parent = gui
 
-	local board = panel(match, "Scoreboard")
-	board.AnchorPoint = Vector2.new(0.5, 0)
-	board.Position = UDim2.new(0.5, 0, 0, 14)
-	board.Size = UDim2.new(0, 360, 0, 66)
+	local scoreboard = panel(match, "Scoreboard")
+	scoreboard.AnchorPoint = Vector2.new(0.5, 0)
+	scoreboard.Position = UDim2.new(0.5, 0, 0, 14)
+	scoreboard.Size = UDim2.new(0, 360, 0, 66)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 14)
+	pad.PaddingRight = UDim.new(0, 14)
+	pad.Parent = scoreboard
 
-	local function side(xScale: number, name: string, color: Color3, align: Enum.TextXAlignment)
-		local n = label(board, name, 14, color)
+	local function side(xScale: number, color: Color3, align: Enum.TextXAlignment)
+		local n = label(scoreboard, "", 14, color)
 		n.Position = UDim2.new(xScale, 0, 0, 8)
 		n.Size = UDim2.new(0.5, -60, 0, 18)
 		n.TextXAlignment = align
-		local games = label(board, "", 13, INK_DIM, FONT_REGULAR)
+		local games = label(scoreboard, "", 13, INK_DIM, FONT_REGULAR)
 		games.Position = UDim2.new(xScale, 0, 0, 38)
 		games.Size = UDim2.new(0.5, -60, 0, 18)
 		games.TextXAlignment = align
@@ -329,24 +426,20 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		serve.Position = if align == Enum.TextXAlignment.Left
 			then UDim2.new(xScale, 0, 0, 30)
 			else UDim2.new(xScale, 0, 0, 30) + UDim2.new(0.5, -68, 0, 0)
-		serve.Parent = board
+		serve.Parent = scoreboard
 		corner(serve, 4)
 		return n, games, serve
 	end
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 14)
-	pad.PaddingRight = UDim.new(0, 14)
-	pad.Parent = board
-	local _, myGames, myServe = side(0, "あなた", Palette.TeamA, Enum.TextXAlignment.Left)
-	local theirName, theirGames, theirServe = side(0.5, "BOT", Palette.TeamB, Enum.TextXAlignment.Right)
+	local myName, myGames, myServe = side(0, Palette.TeamA, Enum.TextXAlignment.Left)
+	bind(myName, "hud.you")
+	local theirName, theirGames, theirServe = side(0.5, Palette.TeamB, Enum.TextXAlignment.Right)
 	theirName.Position += UDim2.fromOffset(60, 0)
 	theirGames.Position += UDim2.fromOffset(60, 0)
 
-	local score = label(board, "", 34, INK)
+	local score = label(scoreboard, "", 34, INK)
 	score.AnchorPoint = Vector2.new(0.5, 0.5)
 	score.Position = UDim2.fromScale(0.5, 0.5)
 	score.Size = UDim2.fromOffset(120, 40)
-	score.Text = ""
 	local myPoints = label(score, "0", 34, INK)
 	myPoints.Size = UDim2.new(0.5, -8, 1, 0)
 	myPoints.TextXAlignment = Enum.TextXAlignment.Right
@@ -365,8 +458,16 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	rally.Position = UDim2.new(0.5, 0, 0, 88)
 	rally.Size = UDim2.fromOffset(240, 22)
 
+	local tutorial = label(match, "", 18, Palette.Grade.Good)
+	tutorial.AnchorPoint = Vector2.new(0.5, 0)
+	tutorial.Position = UDim2.new(0.5, 0, 0, 112)
+	tutorial.Size = UDim2.new(0.8, 0, 0, 48)
+	tutorial.BackgroundColor3 = PANEL
+	tutorial.BackgroundTransparency = 0.25
+	tutorial.Visible = false
+	corner(tutorial, 8)
+
 	local leave = Instance.new("TextButton")
-	leave.Text = "メニュー"
 	leave.TextSize = 14
 	leave.FontFace = FONT
 	leave.TextColor3 = INK
@@ -378,6 +479,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	leave.Parent = match
 	corner(leave, 6)
 	stroke(leave, Palette.TeamA, 0.6)
+	bind(leave, "hud.menu")
 	leave.Activated:Connect(callbacks.onLeave)
 
 	local ping = label(match, "", 12, INK_DIM, FONT_REGULAR)
@@ -386,15 +488,14 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	ping.Size = UDim2.fromOffset(140, 16)
 	ping.TextXAlignment = Enum.TextXAlignment.Right
 
-	-- gauge
 	local gauge = panel(match, "Gauge")
 	gauge.AnchorPoint = Vector2.new(0, 1)
 	gauge.Position = UDim2.new(0, 14, 1, -14)
 	gauge.Size = UDim2.fromOffset(250, 54)
-	local gl = label(gauge, "リフトゲージ", 12, INK_DIM, FONT_REGULAR)
-	gl.Position = UDim2.fromOffset(12, 6)
-	gl.Size = UDim2.new(1, -24, 0, 16)
-	gl.TextXAlignment = Enum.TextXAlignment.Left
+	local gaugeLabel = bind(label(gauge, "", 12, INK_DIM, FONT_REGULAR), "hud.gauge")
+	gaugeLabel.Position = UDim2.fromOffset(12, 6)
+	gaugeLabel.Size = UDim2.new(1, -24, 0, 16)
+	gaugeLabel.TextXAlignment = Enum.TextXAlignment.Left
 	local cells: { Frame } = {}
 	for i = 1, GAUGE_MAX do
 		local c = Instance.new("Frame")
@@ -407,7 +508,6 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		cells[i] = c
 	end
 
-	-- popup
 	local popup = label(match, "", 64, INK)
 	popup.AnchorPoint = Vector2.new(0.5, 0.5)
 	popup.Position = UDim2.fromScale(0.5, 0.36)
@@ -427,14 +527,11 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local hint = label(match, "", 18, INK)
 	hint.AnchorPoint = Vector2.new(0.5, 1)
 	hint.Position = UDim2.new(0.5, 0, 1, -24)
-	hint.Size = UDim2.fromOffset(520, 26)
+	hint.Size = UDim2.fromOffset(560, 26)
 
 	-- result
 	local result = panel(gui, "Result")
-	result.AnchorPoint = Vector2.new(0.5, 0.5)
-	result.Position = UDim2.fromScale(0.5, 0.5)
-	result.Size = UDim2.new(0, 320, 0, 0)
-	result.AutomaticSize = Enum.AutomaticSize.Y
+	centered(result, 320)
 	result.Visible = false
 	vlist(result, 10)
 	local resultTitle = label(result, "", 40, Palette.Grade.Perfect)
@@ -443,15 +540,14 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local rankLine = label(result, "", 18, INK)
 	rankLine.Size = UDim2.new(1, 0, 0, 48)
 	rankLine.Visible = false
-	button(result, "もう一度", Palette.TeamA, callbacks.onRetry)
-	button(result, "メニューへ", Palette.TeamB, callbacks.onLeave)
+	bind(button(result, "", Palette.TeamA, callbacks.onRetry), "result.again")
+	bind(button(result, "", Palette.TeamB, callbacks.onLeave), "result.menu")
 
 	-- touch swing button
 	local touchButton: TextButton? = nil
 	if UserInputService.TouchEnabled then
 		local t = Instance.new("TextButton")
 		t.Name = "SwingButton"
-		t.Text = "打つ"
 		t.TextSize = 26
 		t.FontFace = FONT
 		t.TextColor3 = INK
@@ -463,6 +559,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		t.Parent = match
 		corner(t, 56)
 		stroke(t, INK, 0.3)
+		bind(t, "hud.hit")
 		t.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.Touch then
 				callbacks.onSwingButton()
@@ -471,7 +568,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		touchButton = t
 	end
 
-	-- ability slots (bottom centre) and the announcement line
+	-- ability slots and the announcement line
 	local slotBar = Instance.new("Frame")
 	slotBar.Name = "AbilitySlots"
 	slotBar.BackgroundTransparency = 1
@@ -503,7 +600,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		local cost = label(b, "", 12, INK_DIM, FONT)
 		cost.AnchorPoint = Vector2.new(1, 0)
 		cost.Position = UDim2.new(1, -10, 0, 6)
-		cost.Size = UDim2.fromOffset(60, 14)
+		cost.Size = UDim2.fromOffset(110, 14)
 		cost.TextXAlignment = Enum.TextXAlignment.Right
 		local name = label(b, "", 15, INK, FONT)
 		name.Position = UDim2.fromOffset(10, 24)
@@ -516,7 +613,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		slots[i] = { frame = b, name = name, cost = cost, key = key, stroke = st }
 	end
 	if UserInputService.TouchEnabled then
-		-- move the slots above the swing button on phones
+		-- above the swing button on phones
 		slotBar.AnchorPoint = Vector2.new(1, 1)
 		slotBar.Position = UDim2.new(1, -20, 1, -272)
 		slotBar.Size = UDim2.fromOffset(170, 2 * 56 + 8)
@@ -541,24 +638,33 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 
 	local self = setmetatable({
 		gui = gui,
+		bound = bound,
 		menu = menu,
-		match = match,
-		result = result,
+		profile = profile,
+		menuNote = menuNote,
+		pickChips = pickChips,
+		pickInfo = pickInfo,
+		pickFocus = nil :: string?,
+		loadout = table.clone(Abilities.DefaultLoadout),
+		lastProfile = nil :: { [string]: any }?,
+		leaderboard = leaderboard,
+		boardTitle = boardTitle,
+		boardRows = boardRows,
+		boardTabs = boardTabs,
+		boardRegion = "ASIA",
+		lastBoard = nil :: { scope: string, rows: { { [string]: any } } }?,
+		feedback = feedback,
+		fbCategory = "fun",
+		fbCats = fbCats,
+		fbBox = fbBox,
+		fbStatus = fbStatus,
 		waiting = waiting,
 		waitTitle = waitTitle,
 		waitSub = waitSub,
 		waitBot = waitBot,
 		waitCancel = waitCancel,
-		profile = profile,
-		menuNote = menuNote,
-		board = board,
-		boardTitle = boardTitle,
-		boardRows = boardRows,
-		boardTabs = boardTabs,
-		boardRegion = "ASIA",
-		rankLine = rankLine,
-		ping = ping,
-		resultNote = resultNote,
+		match = match,
+		scoreboard = scoreboard,
 		myPoints = myPoints,
 		theirPoints = theirPoints,
 		theirName = theirName,
@@ -567,38 +673,71 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		myServe = myServe,
 		theirServe = theirServe,
 		rally = rally,
+		ping = ping,
 		gaugeCells = cells,
 		popup = popup,
 		popupSub = popupSub,
 		hint = hint,
-		resultTitle = resultTitle,
-		resultScore = resultScore,
-		touchButton = touchButton,
-		loadout = table.clone(Abilities.DefaultLoadout),
-		pickChips = pickChips,
-		pickInfo = pickInfo,
+		tutorial = tutorial,
+		announce = announce,
 		slots = slots,
 		slotIds = {},
-		announce = announce,
+		touchButton = touchButton,
+		result = result,
+		resultTitle = resultTitle,
+		resultScore = resultScore,
+		resultNote = resultNote,
+		rankLine = rankLine,
 	}, Hud)
 
-	for order, def in Abilities.List do
-		local chip = Instance.new("TextButton")
-		chip.LayoutOrder = order
-		chip.Text = `{def.name}  {def.cost}`
+	-- menu extras: leaderboard, feedback, language
+	local function extra(key: string, width: number, onClick: () -> ())
+		local b = bind(button(extras, "", Palette.TeamA, onClick), key)
+		b.Size = UDim2.new(width, -4, 1, 0)
+		b.TextSize = 14
+	end
+	extra("menu.leaderboard", 0.36, function()
+		callbacks.onLeaderboard("GLOBAL")
+	end)
+	extra("menu.feedback", 0.4, function()
+		self:showFeedback()
+	end)
+	extra("menu.language", 0.24, callbacks.onLanguage)
+
+	for _, cat in FEEDBACK_CATEGORIES do
+		local b = bind(
+			button(cats, "", Palette.TeamA, function()
+				self.fbCategory = cat
+				self:refreshFeedback()
+			end),
+			"fb." .. cat
+		)
+		b.Size = UDim2.new(0.25, -5, 1, 0)
+		b.TextSize = 13
+		fbCats[cat] = b
+	end
+	fbSend.Activated:Connect(function()
+		local text = string.sub(fbBox.Text, 1, 200)
+		if #text > 0 then
+			callbacks.onFeedback(self.fbCategory, text)
+		end
+	end)
+
+	for _, def in Abilities.List do
+		local chip = ordered(Instance.new("TextButton"))
 		chip.TextSize = 13
 		chip.TextScaled = true
 		local limit = Instance.new("UITextSizeConstraint")
 		limit.MaxTextSize = 14
 		limit.Parent = chip
-		local pad = Instance.new("UIPadding")
-		pad.PaddingLeft = UDim.new(0, 6)
-		pad.PaddingRight = UDim.new(0, 6)
-		pad.Parent = chip
+		local cpad = Instance.new("UIPadding")
+		cpad.PaddingLeft = UDim.new(0, 6)
+		cpad.PaddingRight = UDim.new(0, 6)
+		cpad.Parent = chip
 		chip.FontFace = FONT
 		chip.TextColor3 = INK
-		chip.BackgroundColor3 = Color3.fromRGB(16, 22, 40)
-		chip.Parent = grid
+		chip.BackgroundColor3 = FIELD
+		chip.Parent = picks
 		corner(chip, 6)
 		local st = Instance.new("UIStroke")
 		st.Color = abilityColor(def.id)
@@ -610,45 +749,71 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		end)
 		pickChips[def.id] = chip
 	end
-	self:refreshPicks(self.loadout[1])
 	boardTabs[1].Activated:Connect(function()
 		callbacks.onLeaderboard("GLOBAL")
 	end)
 	boardTabs[2].Activated:Connect(function()
 		callbacks.onLeaderboard(self.boardRegion)
 	end)
+	self:relabel()
 	return self
 end
 
-local REGION_NAMES =
-	{ NA = "北米", SA = "南米", EU = "ヨーロッパ", ASIA = "アジア", OCE = "オセアニア" }
+-- Redraws every piece of text in the current language.
+function Hud.relabel(self: Hud)
+	for _, b in self.bound do
+		b.inst[b.prop] = S.t(b.key)
+	end
+	for id, chip in self.pickChips do
+		local def = Abilities.get(id)
+		chip.Text = `{S.abilityName(id)}  {if def then def.cost else ""}`
+	end
+	self:refreshPicks(self.pickFocus or self.loadout[1])
+	self:setSlots(self.slotIds)
+	self:refreshFeedback()
+	if self.lastProfile then
+		self:setProfile(self.lastProfile)
+	end
+	self.boardTabs[2].Text = S.region(self.boardRegion)
+	if self.lastBoard then
+		self:showLeaderboard(self.lastBoard.scope, self.lastBoard.rows, self.leaderboard.Visible)
+	end
+end
 
 function Hud.setProfile(self: Hud, p: { [string]: any })
-	local record = `{p.wins}勝{p.losses}敗`
-	local extra = if p.placement > 0 then `（あと{p.placement}試合で順位が安定）` else ""
-	self.profile.Text = `{p.tier}  レート {p.rating}  {record}  {REGION_NAMES[p.region] or p.region}{extra}`
+	self.lastProfile = p
+	local tier = if p.tierId == "Legend"
+		then S.rank("Legend")
+		else S.rank(Rating.tier(p.rating).id, Rating.tier(p.rating).division)
+	self.profile.Text = S.t("menu.profile", {
+		tier = tier,
+		rating = p.rating,
+		wins = p.wins,
+		losses = p.losses,
+		region = S.region(p.region),
+		extra = if p.placement > 0 then S.t("menu.placement", { n = p.placement }) else "",
+	})
 	self.boardRegion = p.region
-	self.boardTabs[2].Text = REGION_NAMES[p.region] or "地域"
+	self.boardTabs[2].Text = S.region(p.region)
 end
 
 -- A short message on the menu (e.g. why ranked play was refused). Empty hides it.
-function Hud.setMenuNote(self: Hud, text: string)
+-- Problems are red; pass good = true for a friendly tip.
+function Hud.setMenuNote(self: Hud, text: string, good: boolean?)
 	self.menuNote.Text = text
+	self.menuNote.TextColor3 = if good then Palette.Grade.Good else Palette.Grade.Miss
 	self.menuNote.Visible = text ~= ""
 end
 
 export type WaitOptions = { title: string, sub: string?, cancel: boolean?, bot: boolean? }
 
 function Hud.showWaiting(self: Hud, opts: WaitOptions?)
-	local o: WaitOptions = opts
-		or {
-			title = "相手を待っています…",
-			sub = "このサーバーで、もう1人が「カジュアル戦」を押すと始まります",
-		}
+	local o: WaitOptions = opts or { title = S.t("wait.casual"), sub = S.t("wait.casualSub") }
 	self.menu.Visible = false
 	self.match.Visible = false
 	self.result.Visible = false
-	self.board.Visible = false
+	self.leaderboard.Visible = false
+	self.feedback.Visible = false
 	self.waiting.Visible = true
 	self.waitTitle.Text = o.title
 	self.waitSub.Text = o.sub or ""
@@ -656,29 +821,62 @@ function Hud.showWaiting(self: Hud, opts: WaitOptions?)
 	self.waitBot.Visible = o.bot == true
 end
 
-function Hud.showLeaderboard(self: Hud, scope: string, rows: { { [string]: any } })
-	self.board.Visible = true
-	self.boardTitle.Text = if scope == "GLOBAL"
-		then "ランキング（世界）"
-		else `ランキング（{REGION_NAMES[scope] or scope}）`
+function Hud.showLeaderboard(self: Hud, scope: string, rows: { { [string]: any } }, show: boolean?)
+	self.lastBoard = { scope = scope, rows = rows }
+	if show ~= false then
+		self.leaderboard.Visible = true
+		self.feedback.Visible = false
+	end
+	self.boardTitle.Text = S.t("board.titleScope", {
+		scope = if scope == "GLOBAL" then S.t("board.world") else S.region(scope),
+	})
 	for i, r in self.boardRows do
-		local row = rows[i]
-		r.Text = if row
-			then `{row.rank}.  {row.name}   {row.rating}`
-			elseif i == 1 then "まだ記録がありません"
+		local entry = rows[i]
+		r.Text = if entry
+			then `{entry.rank}.  {entry.name}   {entry.rating}`
+			elseif i == 1 then S.t("board.empty")
 			else ""
+	end
+end
+
+function Hud.showFeedback(self: Hud)
+	self.leaderboard.Visible = false
+	self.feedback.Visible = true
+	self.fbStatus.Text = ""
+	self:refreshFeedback()
+end
+
+function Hud.refreshFeedback(self: Hud)
+	for cat, b in self.fbCats do
+		b.BackgroundColor3 = if cat == self.fbCategory then Palette.TeamA:Lerp(PANEL, 0.55) else FIELD
+	end
+end
+
+-- Result of sending feedback: "ok" | "tooSoon" | "failed".
+function Hud.feedbackResult(self: Hud, status: string)
+	if status == "ok" then
+		self.fbStatus.Text = S.t("fb.thanks")
+		self.fbBox.Text = ""
+	elseif status == "tooSoon" then
+		self.fbStatus.Text = S.t("fb.tooSoon")
+	else
+		self.fbStatus.Text = S.t("fb.failed")
 	end
 end
 
 -- After a ranked match: how the rating and rank moved.
 function Hud.setRankResult(self: Hud, e: { [string]: any })
+	local before, after = Rating.tier(e.before), Rating.tier(e.after)
+	local beforeText, afterText = S.rank(before.id, before.division), S.rank(after.id, after.division)
 	local sign = if e.delta >= 0 then "+" else ""
-	local tierText = if e.tierAfter ~= e.tierBefore then `{e.tierBefore} → {e.tierAfter}` else e.tierAfter
-	self.rankLine.Text = `レート {e.before} → {e.after}（{sign}{e.delta}）\n{tierText}`
+	local tierText = if beforeText ~= afterText then `{beforeText} → {afterText}` else afterText
+	self.rankLine.Text = S.t("result.rating", { before = e.before, after = e.after, delta = sign .. e.delta })
+		.. "\n"
+		.. tierText
 	self.rankLine.TextColor3 = if e.delta >= 0 then Palette.Grade.Good else Palette.Grade.Miss
 	self.rankLine.Visible = true
 	if e.rankUp then
-		self:popupText(`ランクアップ！ {e.tierAfter}`, Palette.Grade.Perfect)
+		self:popupText(S.t("result.rankUp", { tier = afterText }), Palette.Grade.Perfect)
 	end
 end
 
@@ -699,18 +897,18 @@ function Hud.togglePick(self: Hud, id: string)
 end
 
 function Hud.refreshPicks(self: Hud, focus: string?)
+	self.pickFocus = focus
 	for id, chip in self.pickChips do
 		local on = table.find(self.loadout, id) ~= nil
 		local color = abilityColor(id)
-		chip.BackgroundColor3 = if on then color:Lerp(PANEL, 0.55) else Color3.fromRGB(16, 22, 40)
+		chip.BackgroundColor3 = if on then color:Lerp(PANEL, 0.55) else FIELD
 		local st = chip:FindFirstChildOfClass("UIStroke")
 		if st then
 			st.Transparency = if on then 0 else 0.6
 		end
 	end
-	local def = focus and Abilities.get(focus)
-	if def then
-		self.pickInfo.Text = `{def.name}（{def.role}・ゲージ{def.cost}）：{def.effect}`
+	if focus then
+		self.pickInfo.Text = S.abilityInfo(focus)
 	end
 end
 
@@ -722,12 +920,12 @@ end
 function Hud.setSlots(self: Hud, loadout: { string })
 	for i, s in self.slots do
 		local id = loadout[i]
-		local def = id and Abilities.get(id)
+		local def = if id then Abilities.get(id) else nil
 		s.frame.Visible = def ~= nil
 		self.slotIds[i] = id
 		if def then
-			s.name.Text = def.name
-			s.cost.Text = `ゲージ {def.cost}`
+			s.name.Text = S.abilityName(def.id)
+			s.cost.Text = S.t("hud.cost", { n = def.cost })
 			s.stroke.Color = abilityColor(def.id)
 		end
 	end
@@ -741,8 +939,12 @@ function Hud.setSlotStates(self: Hud, states: { string })
 		s.name.TextTransparency = if state == "waiting" then 0.5 else 0
 		s.stroke.Thickness = if state == "armed" then 3 else 1.5
 		s.stroke.Transparency = if state == "waiting" then 0.7 elseif state == "armed" then 0 else 0.2
-		local def = self.slotIds[i] and Abilities.get(self.slotIds[i])
-		s.cost.Text = if state == "armed" then "次の返球で発動" elseif def then `ゲージ {def.cost}` else ""
+		local id = self.slotIds[i]
+		local def = if id then Abilities.get(id) else nil
+		s.cost.Text = if state == "armed"
+			then S.t("hud.armedSlot")
+			elseif def then S.t("hud.cost", { n = def.cost })
+			else ""
 	end
 end
 
@@ -755,16 +957,24 @@ function Hud.announceAbility(self: Hud, text: string, color: Color3)
 	TweenService:Create(self.announce, info, { TextTransparency = 1 }):Play()
 end
 
+-- The tutorial's current instruction, or nil to hide it.
+function Hud.setTutorial(self: Hud, text: string?)
+	self.tutorial.Visible = text ~= nil
+	self.tutorial.Text = text or ""
+end
+
 function Hud.showMenu(self: Hud)
 	self.menu.Visible = true
 	self.match.Visible = false
 	self.result.Visible = false
 	self.waiting.Visible = false
+	self:setTutorial(nil)
 end
 
 function Hud.showMatch(self: Hud, opponentName: string)
 	self.rankLine.Visible = false
-	self.board.Visible = false
+	self.leaderboard.Visible = false
+	self.feedback.Visible = false
 	self.menu.Visible = false
 	self.result.Visible = false
 	self.waiting.Visible = false
@@ -783,8 +993,8 @@ function Hud.setScore(self: Hud, snap: { [string]: any }, me: number)
 	local them = if me == 1 then 2 else 1
 	self.myPoints.Text = tostring(snap.points[me])
 	self.theirPoints.Text = tostring(snap.points[them])
-	self.myGames.Text = "ゲーム " .. dots(snap.games[me])
-	self.theirGames.Text = dots(snap.games[them]) .. " ゲーム"
+	self.myGames.Text = S.t("hud.games") .. " " .. dots(snap.games[me])
+	self.theirGames.Text = dots(snap.games[them]) .. " " .. S.t("hud.games")
 	self.myServe.Visible = snap.server == me
 	self.theirServe.Visible = snap.server == them
 	self:setGauge(snap.gauge[me])
@@ -797,20 +1007,17 @@ function Hud.setGauge(self: Hud, value: number)
 end
 
 function Hud.setRally(self: Hud, n: number)
-	self.rally.Text = if n >= 2 then `ラリー {n}` else ""
+	self.rally.Text = if n >= 2 then S.t("hud.rally", { n = n }) else ""
 end
 
 function Hud.setHint(self: Hud, text: string)
 	self.hint.Text = text
 end
 
-local GRADE_TEXT =
-	{ Perfect = "PERFECT!!", Good = "GOOD", Weak = "あまい…", Miss = "MISS", Barrier = "バリア！" }
-
 -- Shows the timing grade. offset = seconds early (negative) or late (positive).
 function Hud.popupGrade(self: Hud, grade: string, offset: number?)
 	local color = if grade == "Barrier" then abilityColor("Barrier") else (Palette.Grade[grade] or INK)
-	self.popup.Text = GRADE_TEXT[grade] or grade
+	self.popup.Text = if S.has("grade." .. grade) then S.t("grade." .. grade) else grade
 	self.popup.TextColor3 = color
 	self.popup.TextTransparency = 0
 	self.popup.Size = UDim2.fromOffset(600, if grade == "Perfect" then 96 else 72)
@@ -818,7 +1025,7 @@ function Hud.popupGrade(self: Hud, grade: string, offset: number?)
 	local sub = ""
 	if offset and grade ~= "Perfect" and grade ~= "Barrier" then
 		local ms = math.round(math.abs(offset) * 1000)
-		sub = if offset < 0 then `{ms}ms 早い` else `{ms}ms 遅い`
+		sub = S.t(if offset < 0 then "hud.early" else "hud.late", { ms = ms })
 	end
 	self.popupSub.Text = sub
 	self.popupSub.TextTransparency = 0
@@ -839,7 +1046,7 @@ end
 
 -- Round-trip time to the server, in milliseconds.
 function Hud.setPing(self: Hud, ms: number)
-	self.ping.Text = `通信 {math.round(ms)}ms`
+	self.ping.Text = S.t("hud.ping", { ms = math.round(ms) })
 	self.ping.TextColor3 = if ms > 250 then Palette.Grade.Miss elseif ms > 150 then Palette.Grade.Perfect else INK_DIM
 end
 
@@ -847,10 +1054,11 @@ function Hud.showResult(self: Hud, won: boolean, myGames: number, theirGames: nu
 	self.result.Visible = true
 	self.resultNote.Text = note or ""
 	self.resultNote.Visible = note ~= nil
-	self.resultTitle.Text = if won then "WIN!" else "LOSE"
+	self.resultTitle.Text = S.t(if won then "result.win" else "result.lose")
 	self.resultTitle.TextColor3 = if won then Palette.Grade.Perfect else Palette.Grade.Miss
-	self.resultScore.Text = `ゲーム {myGames} - {theirGames}`
+	self.resultScore.Text = S.t("result.games", { a = myGames, b = theirGames })
 	self.hint.Text = ""
+	self:setTutorial(nil)
 end
 
 return Hud

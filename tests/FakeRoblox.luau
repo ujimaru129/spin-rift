@@ -146,6 +146,12 @@ local function newInstance(className: string): any
 		return 0.05
 	end
 	function methods:LoadCharacter() end
+	function methods:Kick(message)
+		props.__kicked = message or ""
+	end
+	function methods:GetRankInGroup(groupId)
+		return (props.__groups or {})[groupId] or 0
+	end
 
 	rawset(obj, "__props", props)
 	rawset(obj, "__children", children)
@@ -382,9 +388,14 @@ function Fake.globals(sharedNode: any)
 			end,
 		},
 		LocalizationService = {
+			RobloxLocaleId = "ja-jp",
 			GetCountryRegionForPlayerAsync = function(_, player)
 				return player.Country or "JP"
 			end,
+		},
+		AnalyticsService = {
+			LogOnboardingFunnelStepEvent = function() end,
+			LogCustomEvent = function() end,
 		},
 		TweenService = {
 			Create = function()
@@ -407,6 +418,7 @@ function Fake.globals(sharedNode: any)
 			return assert(services[name], "no fake for service " .. tostring(name))
 		end,
 		PlaceId = 0,
+		PlaceVersion = 1,
 		JobId = "job-local",
 		PrivateServerId = "",
 		PrivateServerOwnerId = 0,
