@@ -35,6 +35,8 @@ export type BallView = typeof(setmetatable(
 		trails: { [number]: Color3? }, -- cosmetic trail colour by hitter side
 		flickerUntil: number?, -- EMP: the ball flickers on this screen until then
 		stallShown: Trajectory.Shot?, -- Quantum Stop: the shot whose stop was already marked
+		outline: Highlight, -- keeps the ball visible through special-move effects
+		revealUntil: number,
 	},
 	BallView
 ))
@@ -103,6 +105,18 @@ function BallView.new(): BallView
 	shadow.CastShadow = false
 	shadow.Parent = folder
 
+	-- Drawn on top of everything for a moment after a special move, so the effects never hide
+	-- the ball (never used while a trick is meant to hide it: Blind, Phantom, EMP)
+	local outline = Instance.new("Highlight")
+	outline.Adornee = ball
+	outline.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	outline.FillColor = Color3.new(1, 1, 1)
+	outline.FillTransparency = 0.2
+	outline.OutlineColor = Color3.new(1, 1, 1)
+	outline.OutlineTransparency = 0
+	outline.Enabled = false
+	outline.Parent = folder
+
 	-- Phantom copies: same look as the ball, no light and no shadow on the table
 	local ghosts: { Part } = {}
 	for i = 1, 2 do
@@ -138,6 +152,8 @@ function BallView.new(): BallView
 		ghosts = ghosts,
 		baseColor = Color3.new(1, 1, 1),
 		trails = {},
+		outline = outline,
+		revealUntil = 0,
 	}, BallView)
 end
 
@@ -198,6 +214,11 @@ function BallView._style(self: BallView, shot: Trajectory.Shot)
 	end
 end
 
+-- A special move just went off: keep the ball drawn on top of its effects until then.
+function BallView.reveal(self: BallView, untilTime: number)
+	self.revealUntil = untilTime
+end
+
 -- EMP hit this player: the ball flickers until then (its shadow on the table stays).
 function BallView.flicker(self: BallView, untilTime: number)
 	self.flickerUntil = untilTime
@@ -216,6 +237,7 @@ function BallView.hide(self: BallView)
 	self.ball.Transparency = 1
 	self.shadow.Transparency = 1
 	self.trail.Enabled = false
+	self.outline.Enabled = false
 	for _, g in self.ghosts do
 		g.Transparency = 1
 		local gt = g:FindFirstChildOfClass("Trail")
@@ -309,6 +331,7 @@ function BallView.update(self: BallView, now: number, dt: number)
 		pos = self.lastPos + self.velocity * dt
 		local fade = math.clamp(since / 0.6, 0, 1)
 		self.ball.Transparency = fade
+		self.outline.Enabled = false
 		if fade >= 1 then
 			self:hide()
 			return
@@ -349,6 +372,7 @@ function BallView.update(self: BallView, now: number, dt: number)
 			self.ball.Transparency = 0.85
 			self.trail.Enabled = false
 		end
+		self.outline.Enabled = now < self.revealUntil and self.ball.Transparency < 0.5 and not shot.effects.phantom
 		-- Quantum Stop: a burst of light where it stops, and a bright pulse while it hangs there
 		local st, se = shot.effects.stallStart, shot.effects.stallEnd
 		if st and se and now >= st and now < se then

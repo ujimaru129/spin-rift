@@ -165,6 +165,9 @@ local function stroke(parent: Instance, color: Color3, transparency: number)
 	s.Parent = parent
 end
 
+-- Height of the special-move cut-in band (fraction of the screen): above the table.
+local CUT_Y = 0.2
+
 local function label(parent: Instance, text: string, size: number, color: Color3?, font: Font?): TextLabel
 	local l = Instance.new("TextLabel")
 	l.BackgroundTransparency = 1
@@ -828,9 +831,9 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	cutIn.Name = "CutIn"
 	cutIn.BorderSizePixel = 0
 	cutIn.AnchorPoint = Vector2.new(0.5, 0.5)
-	cutIn.Position = UDim2.fromScale(1.6, 0.5)
-	cutIn.Size = UDim2.new(1.4, 0, 0, 96)
-	cutIn.Rotation = -6
+	cutIn.Position = UDim2.fromScale(1.6, CUT_Y)
+	cutIn.Size = UDim2.new(1.4, 0, 0, 56)
+	cutIn.Rotation = -4
 	cutIn.BackgroundTransparency = 0.15
 	cutIn.ZIndex = 21
 	cutIn.Visible = false
@@ -843,11 +846,11 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	cutGradient.Parent = cutIn
-	local cutText = label(cutIn, "", 54, INK)
+	local cutText = label(cutIn, "", 34, INK)
 	cutText.Size = UDim2.fromScale(1, 1)
 	cutText.ZIndex = 22
 	local cutStroke = Instance.new("UIStroke")
-	cutStroke.Thickness = 3
+	cutStroke.Thickness = 2
 	cutStroke.Color = Color3.new(0, 0, 0)
 	cutStroke.Transparency = 0.2
 	cutStroke.Parent = cutText
@@ -1409,24 +1412,29 @@ end
 -- A special move fires: white flash, then the move's name sweeps across the screen on a band
 -- in its colour (in from the right, a short hold in the middle, out to the left).
 function Hud.cutIn(self: Hud, text: string, color: Color3)
-	self.flash.BackgroundTransparency = 0.35
-	TweenService:Create(self.flash, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+	self.flash.BackgroundTransparency = 0.65
+	TweenService:Create(self.flash, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+	-- high on the screen and slim, so the table and the ball stay in view (smaller on phones)
+	local camera = workspace.CurrentCamera
+	local small = camera ~= nil and camera.ViewportSize.Y < 520
 	local band = self.cutBand
 	band.BackgroundColor3 = color
+	band.Size = UDim2.new(1.4, 0, 0, if small then 34 else 56)
+	self.cutText.TextSize = if small then 20 else 34
 	self.cutText.Text = text
 	band.Visible = true
-	band.Position = UDim2.fromScale(1.6, 0.5)
+	band.Position = UDim2.fromScale(1.6, CUT_Y)
 	local inTween = TweenService:Create(
 		band,
-		TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ Position = UDim2.fromScale(0.5, 0.5) }
+		TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Position = UDim2.fromScale(0.5, CUT_Y) }
 	)
 	inTween:Play()
-	task.delay(0.7, function()
+	task.delay(0.5, function()
 		local out = TweenService:Create(
 			band,
-			TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-			{ Position = UDim2.fromScale(-0.6, 0.5) }
+			TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{ Position = UDim2.fromScale(-0.6, CUT_Y) }
 		)
 		out:Play()
 		out.Completed:Once(function()

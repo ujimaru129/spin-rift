@@ -356,14 +356,15 @@ end
 
 -- The big moment of a special move: cut-in with its name, screen flash and tint, camera punch,
 -- and its own effect in the arena (bolts, a black hole, a pillar of light ...).
-local function specialFx(e: { [string]: any }, color: Color3)
+local function specialFx(e: { [string]: any }, color: Color3, title: string)
 	local o = origin
 	if not o then
 		return
 	end
-	hud:cutIn(abilityName(e.id), color)
-	shake = 0.45
-	flashFov(12)
+	hud:cutIn(title, color)
+	ball:reveal(now() + 1.2)
+	shake = 0.35
+	flashFov(8)
 	local side = if e.player == 1 then -1 else 1
 	local ballPos = ball.ball.Position
 	local paddle = o + Vector3.new(side * Config.HitX, Config.HitY, 0)
@@ -409,8 +410,8 @@ local function onAbilityEvent(e: { [string]: any })
 			hud:setHint(S.t("hint.fizzled"))
 		end
 	elseif e.state == "fired" or e.state == "used" then
-		hud:announceAbility(S.t("ability.used", { who = who, ability = abilityName(e.id) }), color)
-		specialFx(e, color)
+		-- one line only: the cut-in band says who used what (no separate announcement)
+		specialFx(e, color, S.t("ability.used", { who = who, ability = abilityName(e.id) }))
 		if mine then
 			armedId = nil
 			usedThisRally = true

@@ -24,7 +24,8 @@ return function(loader)
 		dt: number?,
 	}
 
-	-- Returns the finished match and counts of abilities used, keyed "player:id".
+	-- Returns the finished match, counts of abilities used (keyed "player:id"), and rally stats:
+	-- shots = every serve and return, points = points played, grades = returns by grade.
 	function Sim.play(o: Options)
 		local random = Sim.rng(o.seed)
 		local first = if random(0, 1) < 0.5 then 1 else 2
@@ -34,6 +35,7 @@ return function(loader)
 			Bot.new(o.profiles[2], 1, random, o.loadouts[2]),
 		}
 		local used: { [string]: number } = {}
+		local stats = { shots = 0, points = 0, grades = {} :: { [string]: number }, misses = { timing = 0, reach = 0 } }
 		local dt = o.dt or 1 / 30
 		local now = 0
 		local steps = 0
@@ -78,9 +80,17 @@ return function(loader)
 			add(m:update(now))
 			for _, e in events do
 				if e.kind == "Shot" then
+					stats.shots += 1
 					bots[1]:watch(e.shot)
 					bots[2]:watch(e.shot)
+				elseif e.kind == "Swing" then
+					stats.grades[e.grade] = (stats.grades[e.grade] or 0) + 1
+					if e.grade == "Miss" then
+						local why = if e.reached == false then "reach" else "timing"
+						stats.misses[why] += 1
+					end
 				elseif e.kind == "Point" then
+					stats.points += 1
 					bots[1]:watch(nil)
 					bots[2]:watch(nil)
 				elseif e.kind == "Ability" and (e.state == "used" or e.state == "fired") then
@@ -96,7 +106,7 @@ return function(loader)
 				end
 			end
 		end
-		return m, used
+		return m, used, stats
 	end
 
 	return Sim

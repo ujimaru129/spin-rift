@@ -44,7 +44,7 @@ function Fx.shockwave(parent: Instance, pos: Vector3, color: Color3, size: numbe
 	local sphere = part(parent, Enum.PartType.Ball, color, Enum.Material.ForceField)
 	sphere.Size = Vector3.one * 0.6
 	sphere.CFrame = CFrame.new(pos)
-	sphere.Transparency = 0.1
+	sphere.Transparency = 0.55
 	tween(sphere, t, { Size = Vector3.one * size, Transparency = 1 })
 	for i, axis in { Vector3.yAxis, Vector3.xAxis } do
 		local ring = part(parent, Enum.PartType.Cylinder, color)
@@ -70,7 +70,7 @@ function Fx.burst(parent: Instance, pos: Vector3, color: Color3, count: number, 
 	e.Texture = SPARK_TEXTURE
 	e.Color = ColorSequence.new(Color3.new(1, 1, 1), color)
 	e.LightEmission = 1
-	e.Size = NumberSequence.new(0.6, 0)
+	e.Size = NumberSequence.new(0.4, 0)
 	e.Transparency = NumberSequence.new(0, 1)
 	e.Lifetime = NumberRange.new(0.25, 0.6)
 	e.Speed = NumberRange.new((speed or 30) * 0.5, speed or 30)
@@ -191,8 +191,8 @@ function Fx.screenTint(camera: Camera, color: Color3, hold: number?, drain: bool
 	end
 	local c = tint :: ColorCorrectionEffect
 	c.TintColor = Color3.new(1, 1, 1):Lerp(color, 0.55)
-	c.Brightness = 0.25
-	c.Contrast = 0.35
+	c.Brightness = 0.12
+	c.Contrast = 0.2
 	c.Saturation = if drain then -0.7 else 0.4
 	local back = { TintColor = Color3.new(1, 1, 1), Brightness = 0, Contrast = 0, Saturation = 0 }
 	if hold and hold > 0 then
@@ -217,8 +217,8 @@ function Fx.special(
 	seconds: number?
 )
 	Fx.screenTint(camera, color, if id == "TimeSlow" then seconds else nil, id == "TimeSlow")
-	Fx.shockwave(parent, at, color, 9)
-	Fx.burst(parent, at, color, 40)
+	Fx.shockwave(parent, at, color, 6)
+	Fx.burst(parent, at, color, 24)
 	if id == "Smash" and towards then
 		Fx.lightning(parent, at, towards, color)
 		Fx.lightning(parent, at, towards, Color3.new(1, 1, 1), 6)
