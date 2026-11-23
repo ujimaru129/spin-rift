@@ -15,6 +15,7 @@ export type Profile = {
 	timingSd: number, -- spread of the timing error
 	missChance: number, -- chance per ball of not swinging at all
 	moveSpeed: number, -- studs per second across the table
+	reaction: number, -- seconds after the opponent's hit before the bot starts moving
 	aimSpread: number, -- 0 = always aims at the middle, 1 = uses the full width
 	useChance: number, -- chance of using an ability when there is a chance to
 	immune: boolean?, -- the practice wall is not fooled by abilities
@@ -37,10 +38,11 @@ Bot.Profiles = {
 	-- Practice wall: always returns a steady Good ball near the middle.
 	Wall = {
 		label = "壁打ち",
-		timingBias = 0.1,
+		timingBias = 0.07, -- inside the Good window even when a long rally has narrowed it
 		timingSd = 0,
 		missChance = 0,
 		moveSpeed = 60,
+		reaction = 0,
 		aimSpread = 0.25,
 		useChance = 0,
 		immune = true,
@@ -51,6 +53,7 @@ Bot.Profiles = {
 		timingSd = 0.11,
 		missChance = 0.1,
 		moveSpeed = 9,
+		reaction = 0.4,
 		aimSpread = 0.4,
 		useChance = 0.3,
 	} :: Profile,
@@ -60,6 +63,7 @@ Bot.Profiles = {
 		timingSd = 0.07,
 		missChance = 0.04,
 		moveSpeed = 12,
+		reaction = 0.28,
 		aimSpread = 0.7,
 		useChance = 0.5,
 	} :: Profile,
@@ -69,6 +73,7 @@ Bot.Profiles = {
 		timingSd = 0.04,
 		missChance = 0.015,
 		moveSpeed = 15,
+		reaction = 0.2,
 		aimSpread = 0.95,
 		useChance = 0.7,
 	} :: Profile,
@@ -98,6 +103,7 @@ export type Bot = typeof(setmetatable(
 		trueZ: number,
 		revealAt: number?, -- a curve: when the bot works out where it really goes
 		swingAt: number?,
+		moveAt: number, -- does not start moving toward the ball before this time (reaction)
 		aimZ: number,
 		shot: Trajectory.Shot?,
 		thoughtAbout: Trajectory.Shot?,
@@ -122,6 +128,7 @@ function Bot.new(profileName: string, side: number, random: RandomFn, loadout: {
 		trueZ = 0,
 		revealAt = nil :: number?,
 		swingAt = nil :: number?,
+		moveAt = 0,
 		aimZ = 0,
 		shot = nil :: Trajectory.Shot?,
 		thoughtAbout = nil :: Trajectory.Shot?,
@@ -138,8 +145,7 @@ local function gaussian(random: RandomFn): number
 end
 
 function Bot.pickAim(self: Bot): number
-	local limit = Config.Table.halfWidth - Config.AimMargin
-	return self.random(-1, 1) * limit * self.profile.aimSpread
+	return self.random(-1, 1) * Config.MaxAim * self.profile.aimSpread
 end
 
 -- Tell the bot about a new shot (or an updated one, after Time Slow).
@@ -150,11 +156,14 @@ function Bot.watch(self: Bot, shot: Trajectory.Shot?)
 	self.revealAt = nil
 	if shot == nil or shot.hitterSide == self.side then
 		self.targetZ = 0
+		self.moveAt = 0
 		return
 	end
 	local p = self.profile
+	self.moveAt = shot.startTime + p.reaction
 	local fx = shot.effects
-	local sd, miss = p.timingSd, p.missChance
+	-- a faster ball is harder to time, the same way it is for a person
+	local sd, miss = p.timingSd / (1 - (shot.pace or 0)), p.missChance
 	self.trueZ = shot.to.Z
 	self.targetZ = shot.to.Z
 	if not p.immune then
@@ -283,7 +292,7 @@ function Bot.step(self: Bot, dt: number, now: number): number?
 		self.targetZ = self.trueZ
 		self.revealAt = nil
 	end
-	local delta = self.targetZ - self.z
+	local delta = if now >= self.moveAt then self.targetZ - self.z else 0
 	local move = self:speed(now) * dt
 	self.z += math.clamp(delta, -move, move)
 	local at = self.swingAt

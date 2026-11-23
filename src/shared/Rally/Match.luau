@@ -198,7 +198,8 @@ function Match._returnBall(self: Match, index: number, time: number, grade: stri
 	if grade == "Barrier" then
 		ability = "BarrierReturn"
 	end
-	local nextShot = Trajectory.plan(from, side, aimZ, kind, time, ability, self:wind(time))
+	local pace = math.min(self.rally * Config.Pace.perReturn, Config.Pace.max)
+	local nextShot = Trajectory.plan(from, side, aimZ, kind, time, ability, self:wind(time), pace)
 	self.shot = nextShot
 	self.receiver = Match.other(index)
 	table.insert(events, 1, {

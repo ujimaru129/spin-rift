@@ -148,7 +148,9 @@ return function(loader, expect)
 				expect(events[1].state).toBe("triggered")
 				expect(find(events, "Swing").grade).toBe("Barrier")
 				expect(find(events, "Shot").shot.kind).toBe("Weak")
-				expect(Trajectory.windowScale(find(events, "Shot").shot)).toBe(2.3)
+				-- 2.3 times wider, a little less as the rally has sped up
+				local back = find(events, "Shot").shot
+				expect(Trajectory.windowScale(back)).toBeNear(2.3 * (1 - (back.pace or 0) * Config.Pace.window), 1e-9)
 				expect(m.barrier[2]).toBe(false)
 				expect(m.points[1] + m.points[2]).toBe(0)
 			end,

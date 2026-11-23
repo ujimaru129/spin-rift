@@ -80,7 +80,7 @@ return function(loader, expect)
 			"aim is clamped inside the side lines",
 			function()
 				local shot = Trajectory.plan(Vector3.new(-Config.HitX, Config.HitY, 0), -1, 99, "Good", 0)
-				expect(shot.to.Z).toBe(Config.Table.halfWidth - Config.AimMargin)
+				expect(shot.to.Z).toBe(Config.Shots.Good.aim)
 				expect(math.abs(shot.bounce.Z) <= Config.Table.halfWidth).toBeTruthy()
 			end,
 		},
@@ -450,8 +450,9 @@ return function(loader, expect)
 				local pending = {} -- { at = server receive time, player, time, aimZ, z }
 				local function onShot(shot)
 					local receiver = if shot.hitterSide == -1 then 2 else 1
-					-- anywhere from a little early to late-but-legal (the Weak window)
-					local swingAt = Trajectory.arrivalTime(shot) + random(-0.05, 0.22)
+					-- anywhere from a little early to late-but-legal (the Weak window, which narrows
+					-- as the rally speeds up)
+					local swingAt = Trajectory.arrivalTime(shot) + random(-0.05, 0.22 * Trajectory.windowScale(shot))
 					table.insert(pending, {
 						at = swingAt + oneWay,
 						player = receiver,

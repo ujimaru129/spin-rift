@@ -580,7 +580,7 @@ local function request(player: Player, mode: unknown, loadout: unknown, arenaReq
 end
 
 local function aimToZ(aim: number): number
-	return math.clamp(aim, -1, 1) * (Config.Table.halfWidth - Config.AimMargin)
+	return math.clamp(aim, -1, 1) * Config.MaxAim
 end
 
 local function handleSwing(player: Player, reported: number, aim: number, reportedZ: number?)

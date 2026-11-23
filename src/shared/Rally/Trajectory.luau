@@ -39,6 +39,7 @@ export type Shot = {
 	duration: number, -- flight time without any slow-down
 	bounceFraction: number,
 	kind: string, -- "Serve" | "Perfect" | "Good" | "Weak"
+	pace: number?, -- how much the rally has sped up (0 to Config.Pace.max), nil for none
 	hitterSide: number, -- -1 or 1: who hit it
 	effects: Effects,
 }
@@ -72,7 +73,8 @@ end
 
 -- Builds a shot from the hitter's contact point toward the opponent.
 -- aimZ is where across the table (Z) the ball should arrive at the opponent's paddle;
--- it is clamped so the bounce stays on the table. ability = a shot ability to apply.
+-- it is clamped to how wide this kind of shot can go. ability = a shot ability to apply.
+-- pace = how much the rally has sped up (shortens the flight; see Config.Pace).
 function Trajectory.plan(
 	from: Vector3,
 	hitterSide: number,
@@ -80,18 +82,22 @@ function Trajectory.plan(
 	kind: string,
 	startTime: number,
 	ability: string?,
-	wind: number?
+	wind: number?,
+	pace: number?
 ): Shot
 	local style = (Config.Shots :: any)[kind] :: Config.ShotStyle
 	assert(style, "unknown shot kind: " .. tostring(kind))
 	local dir = -hitterSide -- the ball travels toward the other side
-	local limit = Config.Table.halfWidth - Config.AimMargin
-	local toZ = math.clamp(aimZ + (wind or 0), -limit, limit)
+	local aimLimit = math.min(style.aim, Config.Table.halfWidth - 0.5)
+	-- wind may still blow a ball out to the normal margin, but no further
+	local limit = math.max(aimLimit, Config.Table.halfWidth - Config.AimMargin)
+	local toZ = math.clamp(math.clamp(aimZ, -aimLimit, aimLimit) + (wind or 0), -limit, limit)
 	local fraction = Config.BounceFraction
 	local bounceX = dir * Config.Table.halfLength * style.depth
 	local bounceZ = math.clamp(lerp(from.Z, toZ, fraction), -limit, limit)
 
-	local duration, arc1, arc2 = style.duration, style.arc1, style.arc2
+	local speedUp = math.clamp(pace or 0, 0, Config.Pace.max)
+	local duration, arc1, arc2 = style.duration * (1 - speedUp), style.arc1, style.arc2
 	local effects: Effects = { ability = ability, wind = if wind and wind ~= 0 then wind else nil }
 	if ability == "Smash" then
 		local t = Abilities.Tuning.Smash
@@ -118,6 +124,7 @@ function Trajectory.plan(
 		duration = duration,
 		bounceFraction = fraction,
 		kind = kind,
+		pace = if speedUp > 0 then speedUp else nil,
 		hitterSide = hitterSide,
 		effects = effects,
 	}
@@ -291,6 +298,9 @@ function Trajectory.windowScale(shot: Shot): number
 	end
 	if fx.slowFactor then
 		k *= Abilities.Tuning.TimeSlow.window
+	end
+	if shot.pace then
+		k *= 1 - shot.pace * Config.Pace.window
 	end
 	return k
 end

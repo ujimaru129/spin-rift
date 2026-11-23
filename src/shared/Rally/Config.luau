@@ -21,7 +21,7 @@ Config.HitX = 11
 Config.HitY = 4.4
 
 -- How far (in Z) the ball may land from the player and still be returned.
-Config.Reach = 3.2
+Config.Reach = 2.4
 
 -- Timing windows, in seconds either side of the moment the ball reaches the paddle.
 -- Perfect gives a fast shot and +2 gauge, Good a normal shot, Weak a slow, high, easy ball.
@@ -42,12 +42,26 @@ Config.IgnoreEarlierThan = 0.45
 -- Shape of each kind of shot. duration = seconds from contact to the opponent's paddle.
 -- arc1 = extra height over the first leg (to the bounce), arc2 = over the second leg.
 -- depth = where on the opponent's half it bounces, 0 at the net to 1 at the end line.
-export type ShotStyle = { duration: number, arc1: number, arc2: number, depth: number }
+-- aim = how far from the middle (|Z| at the opponent's paddle) the shot can be placed: only a
+-- Perfect return reaches the corners, so timing well is what lets you move the opponent around.
+export type ShotStyle = { duration: number, arc1: number, arc2: number, depth: number, aim: number }
 Config.Shots = {
-	Serve = { duration = 1.25, arc1 = 1.4, arc2 = 2.2, depth = 0.55 } :: ShotStyle,
-	Perfect = { duration = 0.8, arc1 = 1.1, arc2 = 1.4, depth = 0.75 } :: ShotStyle,
-	Good = { duration = 1.05, arc1 = 2.0, arc2 = 2.0, depth = 0.6 } :: ShotStyle,
-	Weak = { duration = 1.35, arc1 = 3.4, arc2 = 2.8, depth = 0.4 } :: ShotStyle,
+	Serve = { duration = 1.25, arc1 = 1.4, arc2 = 2.2, depth = 0.55, aim = 3 } :: ShotStyle,
+	Perfect = { duration = 0.7, arc1 = 1.0, arc2 = 1.3, depth = 0.8, aim = 4.5 } :: ShotStyle,
+	Good = { duration = 1.05, arc1 = 2.0, arc2 = 2.0, depth = 0.6, aim = 3 } :: ShotStyle,
+	Weak = { duration = 1.35, arc1 = 3.4, arc2 = 2.8, depth = 0.4, aim = 2.2 } :: ShotStyle,
+}
+
+-- The widest aim of any shot. Aim input from -1 to 1 maps onto this, then each shot kind clamps it.
+Config.MaxAim = 4.5
+
+-- The rally speeds up: every return makes the next ball this much quicker (a share of its flight
+-- time), up to `max`, and the receiver's timing windows narrow by `window` times that share.
+-- A long rally becomes hard to keep going, so points end on skill rather than on a lucky miss.
+Config.Pace = {
+	perReturn = 0.06,
+	max = 0.45,
+	window = 0.9,
 }
 
 -- Share of the flight spent before the bounce.
