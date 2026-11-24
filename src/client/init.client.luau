@@ -33,7 +33,6 @@ S.setLocale(if RunService:IsStudio() then "ja" else S.fromLocaleId(LocalizationS
 local requestRemote = Net.get(Net.REQUEST_MATCH)
 local leaveRemote = Net.get(Net.LEAVE_MATCH)
 local swingRemote = Net.get(Net.SWING)
-local abilityRemote = Net.get(Net.USE_ABILITY)
 local helloRemote = Net.get(Net.HELLO)
 local leaderboardRemote = Net.get(Net.REQUEST_LEADERBOARD)
 local feedbackRemote = Net.get(Net.SEND_FEEDBACK)
@@ -59,11 +58,11 @@ local selectedArena = Arenas.DEFAULT
 local bestRating = 1000
 local windActive = false
 
--- what the ability buttons need to know
+-- what the ability slots show
 local myLoadout: { string } = {}
 local myGauge = 0
 local usedThisRally = false
-local armedId: string? = nil
+local nextSlot = 1 -- the ability that fires next
 local inRally = false
 local barrierWalls: { [number]: Part } = {}
 
@@ -135,23 +134,6 @@ local function swing(screenAim: number?)
 	swingRemote:FireServer(t, math.clamp(aim, -1, 1), z)
 end
 
--- Direction for Blink: where the player is walking, or where they aim if standing still.
-local function blinkDirection(): number
-	local character = player.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	local z = if humanoid then humanoid.MoveDirection.Z else 0
-	if math.abs(z) < 0.2 then
-		z = currentAim()
-	end
-	return z
-end
-
-local function useAbility(slot: number)
-	if origin and myLoadout[slot] then
-		abilityRemote:FireServer(slot, blinkDirection())
-	end
-end
-
 local function arenaButtonText(): string
 	local a = Arenas.get(selectedArena) or Arenas.List[1]
 	local text = S.t("menu.arena", { name = S.t("arena." .. a.id) })
@@ -176,7 +158,6 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 		requestRemote:FireServer(currentMode, hud:getLoadout(), selectedArena)
 	end,
 	onSwingButton = swing,
-	onAbility = useAbility,
 	onLeaderboard = function(scope: string)
 		leaderboardRemote:FireServer(scope)
 	end,
@@ -251,7 +232,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 	local t = input.UserInputType
 	local key = input.KeyCode
-	-- left hand: Space hits, Q/E use abilities; right hand (for A/D players): J hits, K/L abilities
+	-- Space hits (left hand), or J (right hand, for A/D players)
 	if
 		t == Enum.UserInputType.MouseButton1
 		or key == Enum.KeyCode.Space
@@ -259,10 +240,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		or key == Enum.KeyCode.ButtonR2
 	then
 		swing()
-	elseif key == Enum.KeyCode.Q or key == Enum.KeyCode.K or key == Enum.KeyCode.ButtonL1 then
-		useAbility(1)
-	elseif key == Enum.KeyCode.E or key == Enum.KeyCode.L or key == Enum.KeyCode.ButtonL2 then
-		useAbility(2)
 	end
 end)
 UserInputService.InputChanged:Connect(function(input)
@@ -331,13 +308,8 @@ local function refreshSlots()
 	local states = {}
 	for i, id in myLoadout do
 		local def = Abilities.get(id)
-		if armedId == id then
-			states[i] = "armed"
-		elseif def and (inRally or def.kind == "shot") and not usedThisRally and myGauge >= def.cost then
-			states[i] = "ready"
-		else
-			states[i] = "waiting"
-		end
+		local enough = def ~= nil and myGauge >= def.cost
+		states[i] = if i ~= nextSlot or usedThisRally then "waiting" elseif enough then "ready" else "next"
 	end
 	hud:setSlotStates(states)
 end
@@ -354,7 +326,7 @@ local function abilityName(id: string): string
 	return S.abilityName(id)
 end
 
--- The big moment of a special move: cut-in with its name, screen flash and tint, camera punch,
+-- The big moment of a special move: cut-in with its name, a light tint, a small camera punch,
 -- and its own effect in the arena (bolts, a black hole, a pillar of light ...).
 local function specialFx(e: { [string]: any }, color: Color3, title: string)
 	local o = origin
@@ -363,8 +335,8 @@ local function specialFx(e: { [string]: any }, color: Color3, title: string)
 	end
 	hud:cutIn(title, color)
 	ball:reveal(now() + 1.2)
-	shake = 0.35
-	flashFov(8)
+	shake = 0.2
+	flashFov(4)
 	local side = if e.player == 1 then -1 else 1
 	local ballPos = ball.ball.Position
 	local paddle = o + Vector3.new(side * Config.HitX, Config.HitY, 0)
@@ -394,30 +366,14 @@ local function onAbilityEvent(e: { [string]: any })
 	local mine = e.player == me
 	local color = Hud.abilityColor(e.id)
 	local who = if mine then "" else S.t("ability.them")
-	if e.state == "armed" then
-		if mine then
-			armedId = e.id
-			hud:setHint(S.t("hint.armed", { ability = abilityName(e.id) }))
-		end
-	elseif e.state == "disarmed" then
-		if mine then
-			armedId = nil
-			hud:setHint("")
-		end
-	elseif e.state == "fizzled" then
-		if mine then
-			armedId = nil
-			hud:setHint(S.t("hint.fizzled"))
-		end
-	elseif e.state == "fired" or e.state == "used" then
+	if e.state == "fired" or e.state == "used" then
 		-- one line only: the cut-in band says who used what (no separate announcement)
 		specialFx(e, color, S.t("ability.used", { who = who, ability = abilityName(e.id) }))
 		if mine then
-			armedId = nil
 			usedThisRally = true
 			myGauge = e.gauge or myGauge
+			nextSlot = e.nextSlot or nextSlot
 			hud:setGauge(myGauge)
-			hud:setHint("")
 		end
 		local o = origin
 		if e.state == "used" and o then
@@ -519,7 +475,7 @@ local function onEvent(e: { [string]: any })
 		origin = e.origin
 		cameraZ = 0
 		myLoadout = e.loadout or {}
-		myGauge, usedThisRally, armedId, inRally = 0, false, nil, false
+		myGauge, usedThisRally, nextSlot, inRally = 0, false, 1, false
 		clearBarrier(1)
 		clearBarrier(2)
 		ball:setOrigin(e.origin)
@@ -554,6 +510,7 @@ local function onEvent(e: { [string]: any })
 	elseif kind == "Score" then
 		hud:setScore(e, me)
 		myGauge = e.gauge[me]
+		nextSlot = if e.nextSlot then e.nextSlot[me] else nextSlot
 		refreshSlots()
 	elseif kind == "ServeWait" then
 		serveHint(e.server)
@@ -562,19 +519,12 @@ local function onEvent(e: { [string]: any })
 			ball:updateShot(e.shot)
 		else
 			ball:setShot(e.shot, now())
-			if not armedId then
-				hud:setHint("")
-			end
+			hud:setHint("")
 		end
 		inRally = true
 		refreshSlots()
 	elseif kind == "Ability" then
 		onAbilityEvent(e)
-	elseif kind == "AbilityDenied" then
-		if e.player == me then
-			local key = "denied." .. tostring(e.reason)
-			hud:setHint(S.t(if S.has(key) then key else "denied.other"))
-		end
 	elseif kind == "Swing" then
 		if e.player == me then
 			hud:popupGrade(e.grade, e.offset)
@@ -586,10 +536,6 @@ local function onEvent(e: { [string]: any })
 				myGauge = e.gauge
 				hud:setGauge(e.gauge)
 				refreshSlots()
-				if e.grade == "Perfect" then
-					shake = 0.35
-					flashFov(6)
-				end
 			end
 		elseif e.grade ~= "Miss" then
 			ball:hitEffect(e.grade)
@@ -602,7 +548,7 @@ local function onEvent(e: { [string]: any })
 		end
 	elseif kind == "Point" then
 		ball:lose(now())
-		inRally, usedThisRally, armedId = false, false, nil
+		inRally, usedThisRally = false, false
 		clearBarrier(1)
 		clearBarrier(2)
 		refreshSlots()

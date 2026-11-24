@@ -1,8 +1,8 @@
 --!strict
 -- Computer opponent. It watches each shot coming its way, walks toward where the ball will
 -- arrive and swings at a planned moment with some timing error. It is fooled by abilities the
--- way a person would be (a curve is read late, Phantom and Blind make timing worse) and uses its
--- own abilities when they make sense. Pure logic: the caller passes in a random function so tests
+-- way a person would be (a curve is read late, Phantom and Blind make timing worse). Its own
+-- abilities fire by themselves, the same as a player's (see Match.autoUse). Pure logic: the caller passes in a random function so tests
 -- can be deterministic.
 
 local Config = require(script.Parent.Config)
@@ -17,7 +17,6 @@ export type Profile = {
 	moveSpeed: number, -- studs per second across the table
 	reaction: number, -- seconds after the opponent's hit before the bot starts moving
 	aimSpread: number, -- 0 = always aims at the middle, 1 = uses the full width
-	useChance: number, -- chance of using an ability when there is a chance to
 	immune: boolean?, -- the practice wall is not fooled by abilities
 }
 
@@ -44,7 +43,6 @@ Bot.Profiles = {
 		moveSpeed = 60,
 		reaction = 0,
 		aimSpread = 0.25,
-		useChance = 0,
 		immune = true,
 	} :: Profile,
 	Easy = {
@@ -55,7 +53,6 @@ Bot.Profiles = {
 		moveSpeed = 9,
 		reaction = 0.4,
 		aimSpread = 0.4,
-		useChance = 0.3,
 	} :: Profile,
 	Normal = {
 		label = "ふつう",
@@ -65,7 +62,6 @@ Bot.Profiles = {
 		moveSpeed = 12,
 		reaction = 0.28,
 		aimSpread = 0.7,
-		useChance = 0.5,
 	} :: Profile,
 	Hard = {
 		label = "つよい",
@@ -75,22 +71,10 @@ Bot.Profiles = {
 		moveSpeed = 15,
 		reaction = 0.2,
 		aimSpread = 0.95,
-		useChance = 0.7,
 	} :: Profile,
 }
 
 export type RandomFn = (min: number, max: number) -> number
-
--- What the bot can see when deciding whether to use an ability.
-export type Situation = {
-	now: number,
-	gauge: number,
-	used: boolean, -- already used an ability this rally
-	armed: string?,
-	barrier: boolean,
-	receiving: boolean, -- the ball is coming to the bot
-	shot: Trajectory.Shot?,
-}
 
 export type Bot = typeof(setmetatable(
 	{} :: {
@@ -106,8 +90,6 @@ export type Bot = typeof(setmetatable(
 		moveAt: number, -- does not start moving toward the ball before this time (reaction)
 		aimZ: number,
 		shot: Trajectory.Shot?,
-		thoughtAbout: Trajectory.Shot?,
-		eager: boolean, -- rolled once per shot: willing to spend gauge on a tight ball
 		slowUntil: number,
 		slowFactor: number,
 		jammedUntil: number?, -- EMP
@@ -131,8 +113,6 @@ function Bot.new(profileName: string, side: number, random: RandomFn, loadout: {
 		moveAt = 0,
 		aimZ = 0,
 		shot = nil :: Trajectory.Shot?,
-		thoughtAbout = nil :: Trajectory.Shot?,
-		eager = false,
 		slowUntil = 0,
 		slowFactor = 1,
 	}, Bot)
@@ -218,72 +198,6 @@ end
 
 function Bot.speed(self: Bot, now: number): number
 	return self.profile.moveSpeed * (if now < self.slowUntil then self.slowFactor else 1)
-end
-
--- Can the bot still get to the ball in time? margin < 1 asks "comfortably", not just barely.
-local function canReach(self: Bot, now: number, margin: number?): boolean
-	local shot = self.shot
-	if not shot or self.revealAt then
-		return true -- has not worked out the curve yet
-	end
-	local left = math.max(Trajectory.arrivalTime(shot) - now, 0)
-	local k = margin or 1
-	return math.abs(self.trueZ - self.z) <= self:speed(now) * left * k + Config.Reach * 0.8
-end
-
--- Decide whether to use an ability now. Returns the loadout slot to use (and a direction for
--- Blink), or nil. Chance-based uses are rolled once per shot so the bot does not spam; uses that
--- answer a problem (the ball is out of reach) are checked every step.
-function Bot.think(self: Bot, s: Situation): (number?, number?)
-	if s.used or #self.loadout == 0 or s.shot == nil then
-		return nil, nil
-	end
-	local firstLook = self.thoughtAbout ~= s.shot
-	self.thoughtAbout = s.shot
-	local chance = self.profile.useChance
-	if firstLook then
-		self.eager = self.random(0, 1) < chance
-	end
-	local order = {}
-	for i = 1, #self.loadout do
-		table.insert(order, math.floor(self.random(0, 1) * (#order + 1)) + 1, i)
-	end
-	for _, slot in order do
-		local id = self.loadout[slot]
-		local def = Abilities.get(id)
-		if def and s.gauge >= def.cost then
-			local roll = if firstLook then self.random(0, 1) else 1
-			if def.kind == "shot" then
-				if s.receiving and s.armed == nil and roll < chance then
-					return slot, nil
-				end
-			elseif id == "TimeSlow" then
-				local fast = s.shot and (s.shot.effects.smash or s.shot.kind == "Perfect")
-				if s.receiving and s.shot and ((fast and roll < chance) or not canReach(self, s.now)) then
-					return slot, nil
-				end
-			elseif id == "Blink" then
-				-- a long way to go: jump instead of running (only once the bot knows where it goes)
-				local far = self.revealAt == nil and math.abs(self.trueZ - self.z) > 2.2
-				local tight = self.eager and (far or not canReach(self, s.now, 0.5))
-				if s.receiving and (tight or not canReach(self, s.now)) then
-					return slot, if self.trueZ > self.z then 1 else -1
-				end
-			elseif id == "Barrier" then
-				-- raise it against a dangerous ball, or one the bot cannot reach
-				local fx = s.shot.effects
-				local danger = fx.ability ~= nil or s.shot.kind == "Perfect"
-				if s.receiving and not s.barrier and ((danger and roll < chance) or not canReach(self, s.now)) then
-					return slot, nil
-				end
-			elseif id == "GravityWell" or id == "EMP" then
-				if not s.receiving and s.shot and roll < chance then
-					return slot, nil
-				end
-			end
-		end
-	end
-	return nil, nil
 end
 
 -- Advance the bot. Returns the swing time when it swings this step, otherwise nil.

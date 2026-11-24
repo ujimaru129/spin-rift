@@ -32,7 +32,6 @@ export type Callbacks = {
 	onLeave: () -> (),
 	onRetry: () -> (),
 	onSwingButton: (screenAim: number) -> (), -- -1 left, 0 straight, 1 right (on screen)
-	onAbility: (slot: number) -> (),
 	onLeaderboard: (scope: string) -> (),
 	onLanguage: () -> (),
 	onFeedback: (category: string, text: string) -> (),
@@ -41,7 +40,7 @@ export type Callbacks = {
 	onEquip: (kind: string, id: string) -> (),
 }
 
-export type Slot = { frame: TextButton, name: TextLabel, cost: TextLabel, key: TextLabel, stroke: UIStroke }
+export type Slot = { frame: Frame, name: TextLabel, cost: TextLabel, key: TextLabel, stroke: UIStroke }
 type Bound = { inst: any, key: string, prop: string }
 
 local function abilityColor(id: string): Color3
@@ -113,10 +112,11 @@ export type Hud = typeof(setmetatable(
 		aim: TextLabel,
 		tutorial: TextLabel,
 		announce: TextLabel,
-		flash: Frame,
 		static: Frame,
 		glitchUntil: number?,
 		cutBand: Frame,
+		cutEdge: UIStroke,
+		cutToken: number,
 		cutText: TextLabel,
 		slots: { Slot },
 		slotIds: { string },
@@ -676,11 +676,21 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	popupSub.Position = UDim2.fromScale(0.5, 0.42)
 	popupSub.Size = UDim2.fromOffset(400, 24)
 	popupSub.TextTransparency = 1
+	local subStroke = Instance.new("UIStroke")
+	subStroke.Thickness = 2
+	subStroke.Color = Color3.new(0, 0, 0)
+	subStroke.Transparency = 0.2
+	subStroke.Parent = popupSub
 
 	local hint = label(match, "", 18, INK)
 	hint.AnchorPoint = Vector2.new(0.5, 1)
 	hint.Position = UDim2.new(0.5, 0, 1, -24)
 	hint.Size = UDim2.fromOffset(560, 26)
+	local hintStroke = Instance.new("UIStroke")
+	hintStroke.Thickness = 2
+	hintStroke.Color = Color3.new(0, 0, 0)
+	hintStroke.Transparency = 0.2
+	hintStroke.Parent = hint
 
 	-- result
 	local result = panel(gui, "Result")
@@ -750,9 +760,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	slotBar.Parent = match
 	local slots: { Slot } = {}
 	for i = 1, Abilities.SLOTS do
-		local b = Instance.new("TextButton")
-		b.Text = ""
-		b.AutoButtonColor = true
+		local b = Instance.new("Frame")
 		b.BackgroundColor3 = PANEL
 		b.BackgroundTransparency = 0.15
 		b.Position = UDim2.fromOffset((i - 1) * 180, 0)
@@ -765,28 +773,24 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		st.Transparency = 0.6
 		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		st.Parent = b
-		local key = label(b, if i == 1 then "Q" else "E", 12, INK_DIM, FONT)
+		local key = label(b, "", 12, INK, FONT)
 		key.Position = UDim2.fromOffset(10, 6)
-		key.Size = UDim2.fromOffset(40, 14)
+		key.Size = UDim2.fromOffset(60, 14)
 		key.TextXAlignment = Enum.TextXAlignment.Left
 		local cost = label(b, "", 12, INK_DIM, FONT)
 		cost.AnchorPoint = Vector2.new(1, 0)
 		cost.Position = UDim2.new(1, -10, 0, 6)
-		cost.Size = UDim2.fromOffset(110, 14)
+		cost.Size = UDim2.fromOffset(90, 14)
 		cost.TextXAlignment = Enum.TextXAlignment.Right
 		local name = label(b, "", 15, INK, FONT)
 		name.Position = UDim2.fromOffset(10, 24)
 		name.Size = UDim2.new(1, -20, 0, 22)
 		name.TextXAlignment = Enum.TextXAlignment.Left
 		name.TextScaled = true
-		b.Activated:Connect(function()
-			callbacks.onAbility(i)
-		end)
 		slots[i] = { frame = b, name = name, cost = cost, key = key, stroke = st }
 	end
 	if UserInputService.TouchEnabled then
-		-- on phones the two ability buttons sit side by side just above the wide HIT button,
-		-- where the right thumb reaches them
+		-- on phones the two ability slots sit side by side just above the wide HIT button
 		slotBar.AnchorPoint = Vector2.new(1, 1)
 		slotBar.Position = UDim2.new(1, -24, 1, -256)
 		slotBar.Size = UDim2.fromOffset(TOUCH_HIT_WIDTH, 56)
@@ -794,7 +798,6 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		for i, s in slots do
 			s.frame.Position = UDim2.fromOffset((i - 1) * (w + 8), 0)
 			s.frame.Size = UDim2.fromOffset(w, 56)
-			s.key.Text = ""
 		end
 	end
 
@@ -817,35 +820,22 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	announceStroke.Transparency = 0.4
 	announceStroke.Parent = announce
 
-	-- special-move cut-in: a slanted band that sweeps across the screen with the move's name,
-	-- over a quick white flash
-	local flash = Instance.new("Frame")
-	flash.Name = "Flash"
-	flash.BorderSizePixel = 0
-	flash.BackgroundColor3 = Color3.new(1, 1, 1)
-	flash.BackgroundTransparency = 1
-	flash.Size = UDim2.fromScale(1, 1)
-	flash.ZIndex = 20
-	flash.Parent = gui
+	-- special-move cut-in: a dark band with the move's name in white, edged in the move's colour
 	local cutIn = Instance.new("Frame")
 	cutIn.Name = "CutIn"
 	cutIn.BorderSizePixel = 0
 	cutIn.AnchorPoint = Vector2.new(0.5, 0.5)
 	cutIn.Position = UDim2.fromScale(1.6, CUT_Y)
 	cutIn.Size = UDim2.new(1.4, 0, 0, 56)
-	cutIn.Rotation = -4
+	cutIn.BackgroundColor3 = PANEL
 	cutIn.BackgroundTransparency = 0.15
 	cutIn.ZIndex = 21
 	cutIn.Visible = false
 	cutIn.Parent = gui
-	local cutGradient = Instance.new("UIGradient")
-	cutGradient.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 1),
-		NumberSequenceKeypoint.new(0.2, 0),
-		NumberSequenceKeypoint.new(0.8, 0),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	cutGradient.Parent = cutIn
+	local cutEdge = Instance.new("UIStroke")
+	cutEdge.Thickness = 3
+	cutEdge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	cutEdge.Parent = cutIn
 	local cutText = label(cutIn, "", 34, INK)
 	cutText.Size = UDim2.fromScale(1, 1)
 	cutText.ZIndex = 22
@@ -922,9 +912,10 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		aim = aim,
 		tutorial = tutorial,
 		announce = announce,
-		flash = flash,
 		static = static,
 		cutBand = cutIn,
+		cutEdge = cutEdge,
+		cutToken = 0,
 		cutText = cutText,
 		slots = slots,
 		slotIds = {},
@@ -1355,20 +1346,15 @@ function Hud.setSlots(self: Hud, loadout: { string })
 	end
 end
 
--- state per slot: "ready" | "armed" | "waiting" (not enough gauge / used / between points)
+-- state per slot: "ready" (next, gauge full enough) | "next" (next, still charging) | "waiting"
 function Hud.setSlotStates(self: Hud, states: { string })
 	for i, s in self.slots do
 		local state = states[i] or "waiting"
 		s.frame.BackgroundTransparency = if state == "waiting" then 0.55 else 0.15
 		s.name.TextTransparency = if state == "waiting" then 0.5 else 0
-		s.stroke.Thickness = if state == "armed" then 3 else 1.5
-		s.stroke.Transparency = if state == "waiting" then 0.7 elseif state == "armed" then 0 else 0.2
-		local id = self.slotIds[i]
-		local def = if id then Abilities.get(id) else nil
-		s.cost.Text = if state == "armed"
-			then S.t("hud.armedSlot")
-			elseif def then S.t("hud.cost", { n = def.cost })
-			else ""
+		s.stroke.Thickness = if state == "ready" then 3 else 1.5
+		s.stroke.Transparency = if state == "waiting" then 0.7 elseif state == "ready" then 0 else 0.4
+		s.key.Text = if state == "waiting" then "" else S.t("hud.nextSlot")
 	end
 end
 
@@ -1377,7 +1363,7 @@ function Hud.announceAbility(self: Hud, text: string, color: Color3)
 	self.announce.Text = text
 	self.announce.TextColor3 = color
 	self.announce.TextTransparency = 0
-	local info = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.7)
+	local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 2)
 	TweenService:Create(self.announce, info, { TextTransparency = 1 }):Play()
 end
 
@@ -1409,18 +1395,18 @@ function Hud.glitch(self: Hud, seconds: number)
 	end)
 end
 
--- A special move fires: white flash, then the move's name sweeps across the screen on a band
--- in its colour (in from the right, a short hold in the middle, out to the left).
+-- A special move fires: a band with its name slides in at the top, stays long enough to read,
+-- and slides out. A newer move takes the band over.
 function Hud.cutIn(self: Hud, text: string, color: Color3)
-	self.flash.BackgroundTransparency = 0.65
-	TweenService:Create(self.flash, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
-	-- high on the screen and slim, so the table and the ball stay in view (smaller on phones)
+	-- slim and high on the screen, so the table and the ball stay in view (smaller on phones)
 	local camera = workspace.CurrentCamera
 	local small = camera ~= nil and camera.ViewportSize.Y < 520
 	local band = self.cutBand
-	band.BackgroundColor3 = color
-	band.Size = UDim2.new(1.4, 0, 0, if small then 34 else 56)
-	self.cutText.TextSize = if small then 20 else 34
+	self.cutToken += 1
+	local token = self.cutToken
+	self.cutEdge.Color = color
+	band.Size = if small then UDim2.fromOffset(340, 40) else UDim2.fromOffset(560, 60)
+	self.cutText.TextSize = if small then 22 else 34
 	self.cutText.Text = text
 	band.Visible = true
 	band.Position = UDim2.fromScale(1.6, CUT_Y)
@@ -1430,7 +1416,10 @@ function Hud.cutIn(self: Hud, text: string, color: Color3)
 		{ Position = UDim2.fromScale(0.5, CUT_Y) }
 	)
 	inTween:Play()
-	task.delay(0.5, function()
+	task.delay(1.4, function()
+		if self.cutToken ~= token then
+			return
+		end
 		local out = TweenService:Create(
 			band,
 			TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
@@ -1438,7 +1427,9 @@ function Hud.cutIn(self: Hud, text: string, color: Color3)
 		)
 		out:Play()
 		out.Completed:Once(function()
-			band.Visible = false
+			if self.cutToken == token then
+				band.Visible = false
+			end
 		end)
 	end)
 end
@@ -1539,7 +1530,7 @@ function Hud.popupGrade(self: Hud, grade: string, offset: number?)
 	end
 	self.popupSub.Text = sub
 	self.popupSub.TextTransparency = 0
-	local info = TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.25)
+	local info = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.55)
 	TweenService:Create(self.popup, info, { TextTransparency = 1 }):Play()
 	TweenService:Create(self.popupSub, info, { TextTransparency = 1 }):Play()
 end

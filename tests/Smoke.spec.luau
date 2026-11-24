@@ -31,9 +31,6 @@ return function(loader, expect)
 			onSwingButton = function(aim)
 				table.insert(calls, "swing:" .. tostring(aim))
 			end,
-			onAbility = function(slot)
-				table.insert(calls, "ability:" .. slot)
-			end,
 			onLanguage = function() end,
 			onFeedback = function() end,
 			onArena = function() end,
@@ -49,12 +46,12 @@ return function(loader, expect)
 		{
 			"the HUD builds and every screen can be shown",
 			function()
-				local hud, calls = newHud()
+				local hud = newHud()
 				hud:showMenu()
 				hud:showWaiting()
 				hud:showMatch("BOT（ふつう）")
 				hud:setSlots({ "Curve", "Barrier" })
-				hud:setSlotStates({ "armed", "ready" })
+				hud:setSlotStates({ "ready", "next" })
 				hud:setSlotStates({ "waiting", "waiting" })
 				hud:setScore({ points = { 3, 2 }, games = { 1, 0 }, gauge = { 4, 7 }, server = 2 }, 1)
 				for _, g in { "Perfect", "Good", "Weak", "Miss", "Barrier" } do
@@ -67,12 +64,10 @@ return function(loader, expect)
 				hud:setHint("あなたのサーブ")
 				hud:showResult(true, 2, 1, "相手が退出しました")
 				hud:showResult(false, 0, 2)
-				hud.slots[2].frame.Activated:Fire()
-				expect(calls[#calls]).toBe("ability:2")
 			end,
 		},
 		{
-			"on phones the wide HIT button aims by the part you press, and the ability buttons sit above it",
+			"on phones the wide HIT button aims by the part you press, and the ability slots sit above it",
 			function()
 				expect(Hud.touchAim(10, 0, 228)).toBe(-1)
 				expect(Hud.touchAim(114, 0, 228)).toBe(0)
@@ -95,7 +90,7 @@ return function(loader, expect)
 				expect(touchAt(520)).toBe("swing:-1")
 				expect(touchAt(614)).toBe("swing:0")
 				expect(touchAt(715)).toBe("swing:1")
-				-- both ability buttons are above the HIT button, side by side
+				-- both ability slots are above the HIT button, side by side
 				local bar = hud.slots[1].frame.Parent
 				expect(bar.Position.Y.Offset < button.Position.Y.Offset - button.Size.Y.Offset).toBeTruthy()
 				expect(hud.slots[2].frame.Position.X.Offset > hud.slots[1].frame.Position.X.Offset).toBeTruthy()
@@ -293,13 +288,6 @@ return function(loader, expect)
 							if incoming then
 								-- stand where the ball is going
 								myRoot.CFrame = roblox.CFrame.new(origin + Vector3.new(-14, 3.5, incoming.to.Z))
-								-- arm Lightning Smash for this return now and then
-								if math.random() < 0.3 then
-									UserInputService.InputBegan:Fire({
-										UserInputType = roblox.Enum.UserInputType.Keyboard,
-										KeyCode = roblox.Enum.KeyCode.Q,
-									}, false)
-								end
 							end
 						elseif e.kind == "ServeWait" then
 							serveAt = if e.server == 1 then e.at else nil
@@ -393,12 +381,9 @@ return function(loader, expect)
 				expect(string.find(box.Text, "←", 1, true) ~= nil).toBeTruthy()
 
 				-- aiming: the direction held as you hit sets the side; nothing held = straight
-				local swings, abilities = {}, {}
+				local swings = {}
 				local sConn = remotes.Swing.OnServerEvent:Connect(function(_, _t, aim)
 					table.insert(swings, aim)
-				end)
-				local aConn = remotes.UseAbility.OnServerEvent:Connect(function(_, slot)
-					table.insert(abilities, slot)
 				end)
 				local function press(code)
 					local input = { KeyCode = code, UserInputType = roblox.Enum.UserInputType.Keyboard }
@@ -425,13 +410,7 @@ return function(loader, expect)
 				press(roblox.Enum.KeyCode.J)
 				UserInputService.InputEnded:Fire(a, false)
 				expect(swings[#swings] * v.Z < 0).toBeTruthy()
-				-- K and L use abilities 1 and 2, like Q and E
-				press(roblox.Enum.KeyCode.K)
-				press(roblox.Enum.KeyCode.L)
-				expect(abilities[#abilities - 1]).toBe(1)
-				expect(abilities[#abilities]).toBe(2)
 				sConn:Disconnect()
-				aConn:Disconnect()
 				conn:Disconnect()
 				remotes.LeaveMatch:FireServer()
 			end,
@@ -786,7 +765,6 @@ return function(loader, expect)
 				local start, incoming, serveAt
 				local steps = {}
 				local read = 0
-				local pressedQ = false
 				local click =
 					{ UserInputType = roblox.Enum.UserInputType.MouseButton1, KeyCode = roblox.Enum.KeyCode.F }
 				for _ = 1, 60 * 120 do
@@ -804,13 +782,6 @@ return function(loader, expect)
 							if incoming then
 								myRoot.CFrame =
 									roblox.CFrame.new(start.origin + Vector3.new(start.side * 14, 3.5, incoming.to.Z))
-								if steps[#steps] == "ability" and not pressedQ then
-									pressedQ = true
-									UserInputService.InputBegan:Fire({
-										UserInputType = roblox.Enum.UserInputType.Keyboard,
-										KeyCode = roblox.Enum.KeyCode.Q,
-									}, false)
-								end
 							end
 						elseif e.kind == "ServeWait" and start then
 							serveAt = if e.server == start.you then e.at else nil

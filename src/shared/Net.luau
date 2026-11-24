@@ -13,7 +13,6 @@ Net.REQUEST_MATCH = "RequestMatch"
 Net.LEAVE_MATCH = "LeaveMatch" -- client -> server: () — leave the match or stop waiting
 -- client -> server: (serverTime: number, aim: number in -1..1, myZ: number across the table)
 Net.SWING = "Swing"
-Net.USE_ABILITY = "UseAbility" -- client -> server: (slot: 1 | 2, dirZ: number) — dirZ is for Blink
 Net.HELLO = "Hello" -- client -> server: () — the client is ready; the server replies with a Profile event
 Net.REQUEST_LEADERBOARD = "RequestLeaderboard" -- client -> server: (scope: "GLOBAL" | region id)
 -- client -> server: (category: "fun" | "bug" | "balance" | "other", text: string, locale: string)
@@ -30,7 +29,6 @@ local REMOTES = {
 	Net.REQUEST_MATCH,
 	Net.LEAVE_MATCH,
 	Net.SWING,
-	Net.USE_ABILITY,
 	Net.HELLO,
 	Net.REQUEST_LEADERBOARD,
 	Net.SEND_FEEDBACK,

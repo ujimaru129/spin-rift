@@ -32,10 +32,12 @@ export type Match = typeof(setmetatable(
 		armed: { [number]: string? }, -- shot ability waiting for the player's next return
 		usedThisRally: { boolean },
 		barrier: { boolean },
+		nextSlot: { number }, -- loadout slot that fires by itself once the gauge covers it
 		slowedUntil: { number }, -- Gravity Well: server time each player's movement is slowed until
 		whiffed: Trajectory.Shot?, -- a barrier-protected miss: no second swing at the same ball
 		windAt: ((time: number) -> number)?, -- arena wind (casual Sakura Float), nil for none
 		idle: { number }, -- points each player has lost in a row without doing anything
+		auto: boolean, -- abilities fire by themselves (see autoUse); false only in rule tests
 		idleLimit: number?, -- that many idle points in a row loses the match (nil = no limit)
 	},
 	Match
@@ -52,7 +54,7 @@ end
 -- idleLimit: a player who lets this many balls go by in a row without swinging, serving by
 -- hand or using an ability loses the match (reason "idle"). For player-vs-player matches,
 -- so two players who both walk away cannot keep a deuce going forever.
-export type Options = { windAt: ((time: number) -> number)?, idleLimit: number? }
+export type Options = { windAt: ((time: number) -> number)?, idleLimit: number?, auto: boolean? }
 
 function Match.new(now: number, firstServer: number?, loadouts: { { string } }?, options: Options?): Match
 	local first = firstServer or 1
@@ -74,10 +76,12 @@ function Match.new(now: number, firstServer: number?, loadouts: { { string } }?,
 		armed = {},
 		usedThisRally = { false, false },
 		barrier = { false, false },
+		nextSlot = { 1, 1 },
 		slowedUntil = { 0, 0 },
 		whiffed = nil :: Trajectory.Shot?,
 		windAt = if options then options.windAt else nil,
 		idle = { 0, 0 },
+		auto = if options then options.auto == true else false,
 		idleLimit = if options then options.idleLimit else nil,
 	}, Match)
 end
@@ -90,6 +94,7 @@ function Match.snapshot(self: Match): Event
 		gauge = table.clone(self.gauge),
 		server = self.server,
 		barrier = table.clone(self.barrier),
+		nextSlot = table.clone(self.nextSlot),
 	}
 end
 
@@ -175,6 +180,10 @@ function Match._returnBall(self: Match, index: number, time: number, grade: stri
 	end
 	self.gauge[index] = math.min(Config.Gauge.max, self.gauge[index] + Judge.gaugeFor(grade :: any))
 	local ability: string? = nil
+	local queued = self:_queued(index)
+	if self.auto and grade ~= "Barrier" and queued and queued.kind == "shot" then
+		self.armed[index] = queued.id
+	end
 	local armed = self.armed[index]
 	if armed then
 		local def = Abilities.get(armed)
@@ -182,11 +191,15 @@ function Match._returnBall(self: Match, index: number, time: number, grade: stri
 		if def and self.gauge[index] >= def.cost and not self.usedThisRally[index] then
 			ability = armed
 			self.gauge[index] -= def.cost
-			self.usedThisRally[index] = true
-			table.insert(
-				events,
-				{ kind = "Ability", player = index, id = armed, state = "fired", gauge = self.gauge[index] }
-			)
+			self:_spent(index, armed)
+			table.insert(events, {
+				kind = "Ability",
+				player = index,
+				id = armed,
+				state = "fired",
+				gauge = self.gauge[index],
+				nextSlot = self.nextSlot[index],
+			})
 		else
 			table.insert(events, { kind = "Ability", player = index, id = armed, state = "fizzled" })
 		end
@@ -317,9 +330,71 @@ function Match.useAbility(self: Match, index: number, slot: number, now: number,
 		used.distance = Abilities.Tuning.Blink.distance
 	end
 	self.gauge[index] -= def.cost
-	self.usedThisRally[index] = true
+	self:_spent(index, id)
 	used.gauge = self.gauge[index]
+	used.nextSlot = self.nextSlot[index]
 	table.insert(events, 1, used)
+	return events
+end
+
+-- The ability that fires next for a player, when it could fire now: the gauge covers it and the
+-- player has not used one this rally.
+function Match._queued(self: Match, index: number): Abilities.Def?
+	local id = self.loadouts[index][self.nextSlot[index]]
+	local def = if id then Abilities.get(id) else nil
+	if not def or self.usedThisRally[index] or self.gauge[index] < def.cost then
+		return nil
+	end
+	return def
+end
+
+-- An ability was used: one per rally, and the player's other ability is next.
+function Match._spent(self: Match, index: number, id: string)
+	self.usedThisRally[index] = true
+	local slot = table.find(self.loadouts[index], id) or 1
+	self.nextSlot[index] = slot % math.max(#self.loadouts[index], 1) + 1
+end
+
+-- Call every step for each player. Fires a queued instant ability once the gauge covers it, at a
+-- moment it does something (shot abilities go off with the player's return instead).
+-- playerZ = where the player stands across the table.
+function Match.autoUse(self: Match, index: number, now: number, playerZ: number): { Event }
+	local shot = self.shot
+	local def = self:_queued(index)
+	if not self.auto or self.phase ~= "Rally" or not shot or not def or def.kind ~= "instant" then
+		return {}
+	end
+	local left = Trajectory.arrivalTime(shot) - now
+	local receiving = self.receiver == index
+	local gap = shot.to.Z - playerZ
+	local far = math.abs(gap) > Config.Reach
+	local rules = Abilities.Auto
+	local go = false
+	if def.id == "GravityWell" or def.id == "EMP" then
+		go = not receiving
+	elseif not receiving or left <= 0 then
+		go = false
+	elseif def.id == "Blink" then
+		-- a save: the ball is about to pass out of reach
+		go = far and left < rules.blinkBefore
+	elseif def.id == "Barrier" then
+		go = shot.effects.ability ~= nil
+			or shot.kind == "Perfect"
+			or (shot.pace or 0) >= rules.barrierPace
+			or (far and left < rules.barrierBefore)
+	else -- TimeSlow
+		go = now - shot.startTime >= rules.slowAfter
+	end
+	if not go then
+		return {}
+	end
+	local idle = self.idle[index]
+	local slot = self.nextSlot[index]
+	local events = self:useAbility(index, slot, now, gap)
+	self.idle[index] = idle -- the player did not do anything
+	if def.id == "Blink" and events[1] and events[1].state == "used" then
+		events[1].distance = math.min(events[1].distance, math.abs(gap)) -- never jumps past the ball
+	end
 	return events
 end
 

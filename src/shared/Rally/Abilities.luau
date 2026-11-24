@@ -2,8 +2,9 @@
 -- The twelve abilities (eight from the spec, four added after launch). Players bring two into a
 -- match and spend Rift gauge to use them.
 --
--- "shot" abilities are armed first and change the player's next return.
--- "instant" abilities take effect as soon as they are used.
+-- Abilities fire by themselves once the gauge covers them, the two taking turns.
+-- "shot" abilities change the player's next return.
+-- "instant" abilities take effect at once, at a moment they are useful (see Abilities.Auto).
 
 export type Def = {
 	id: string,
@@ -31,6 +32,14 @@ Abilities.Tuning = {
 	QuantumStop = { length = 0.4, factor = 0.05 }, -- stops over the net for `length` seconds
 	Meteor = { arc = 2.4, window = 0.9 }, -- a much higher first arc; harder to time
 	EMP = { length = 2.5, timingSd = 1.5 }, -- the opponent's screen is jammed (bots time worse)
+}
+
+-- When instant abilities fire by themselves (see Match.autoUse).
+Abilities.Auto = {
+	blinkBefore = 0.3, -- seconds before an out-of-reach ball arrives
+	barrierBefore = 0.3,
+	barrierPace = 0.3, -- a ball this much faster than a fresh rally counts as dangerous
+	slowAfter = 0.1, -- seconds after the opponent's hit
 }
 
 local LIST: { Def } = {
@@ -111,7 +120,7 @@ local LIST: { Def } = {
 		kind = "instant",
 		cost = 2,
 		rgb = { 125, 255, 154 },
-		effect = "動いている方向へ6スタッド瞬間移動する",
+		effect = "球に届かないとき、球のほうへ最大6スタッド瞬間移動する",
 		counter = "―",
 	},
 	{

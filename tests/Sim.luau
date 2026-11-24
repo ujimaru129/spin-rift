@@ -29,7 +29,7 @@ return function(loader)
 	function Sim.play(o: Options)
 		local random = Sim.rng(o.seed)
 		local first = if random(0, 1) < 0.5 then 1 else 2
-		local m = Match.new(0, first, o.loadouts)
+		local m = Match.new(0, first, o.loadouts, { auto = true })
 		local bots = {
 			Bot.new(o.profiles[1], -1, random, o.loadouts[1]),
 			Bot.new(o.profiles[2], 1, random, o.loadouts[2]),
@@ -62,20 +62,7 @@ return function(loader)
 				if at then
 					add(m:swing(i, at, b.aimZ, b.z))
 				end
-				if m.phase == "Rally" then
-					local slot, dir = b:think({
-						now = now,
-						gauge = m.gauge[i],
-						used = m.usedThisRally[i],
-						armed = m.armed[i],
-						barrier = m.barrier[i],
-						receiving = m.receiver == i,
-						shot = m.shot,
-					})
-					if slot then
-						add(m:useAbility(i, slot, now, dir))
-					end
-				end
+				add(m:autoUse(i, now, b.z))
 			end
 			add(m:update(now))
 			for _, e in events do

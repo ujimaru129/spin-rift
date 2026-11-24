@@ -179,7 +179,7 @@ function Fx.vortex(parent: Instance, pos: Vector3, color: Color3, seconds: numbe
 	end)
 end
 
--- Tints the whole screen for a moment: a bright pop in the effect's colour, then back.
+-- Tints the whole screen for a moment: a light wash of the effect's colour, then back.
 -- `hold` keeps a softer tint on (Time Slow keeps the picture drained of colour while it lasts).
 local tint: ColorCorrectionEffect? = nil
 function Fx.screenTint(camera: Camera, color: Color3, hold: number?, drain: boolean?)
@@ -190,10 +190,10 @@ function Fx.screenTint(camera: Camera, color: Color3, hold: number?, drain: bool
 		tint = c
 	end
 	local c = tint :: ColorCorrectionEffect
-	c.TintColor = Color3.new(1, 1, 1):Lerp(color, 0.55)
-	c.Brightness = 0.12
-	c.Contrast = 0.2
-	c.Saturation = if drain then -0.7 else 0.4
+	c.TintColor = Color3.new(1, 1, 1):Lerp(color, 0.3)
+	c.Brightness = 0
+	c.Contrast = 0.1
+	c.Saturation = if drain then -0.7 else 0.2
 	local back = { TintColor = Color3.new(1, 1, 1), Brightness = 0, Contrast = 0, Saturation = 0 }
 	if hold and hold > 0 then
 		tween(c, 0.2, { Brightness = 0, Contrast = 0.15, TintColor = Color3.new(1, 1, 1):Lerp(color, 0.25) })
@@ -262,10 +262,10 @@ function Fx.special(
 	end
 end
 
--- A PERFECT return: a sharp white-gold shockwave and sparks.
+-- A PERFECT return: a small shockwave and sparks at the ball (only special moves change the screen).
 function Fx.perfect(parent: Instance, at: Vector3, color: Color3)
-	Fx.shockwave(parent, at, color, 6, 0.3)
-	Fx.burst(parent, at, color, 24, 26)
+	Fx.shockwave(parent, at, color, 3, 0.25)
+	Fx.burst(parent, at, color, 12, 18)
 end
 
 return Fx

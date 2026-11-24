@@ -307,6 +307,42 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"with auto on, a shot ability fires by itself once the gauge covers it, and the other is next",
+			function()
+				local m = Match.new(0, 1, { {}, { "Curve", "GravityWell" } }, { auto = true })
+				m:serve(m.nextServeAt, 0, 0)
+				m.gauge[2] = 0
+				expect(find(returnBall(m, 0), "Ability")).toBe(nil) -- 2 of 3
+				returnBall(m, 0)
+				local fired = find(returnBall(m, 0), "Ability")
+				expect(fired.id).toBe("Curve")
+				expect(fired.state).toBe("fired")
+				expect(fired.nextSlot).toBe(2)
+				-- one per rally: Gravity Well waits for the next one even with a full gauge
+				m.gauge[2] = 10
+				expect(#m:autoUse(2, m.shot.startTime + 0.1, 0)).toBe(0)
+				m.usedThisRally[2] = false
+				expect(m:autoUse(2, m.shot.startTime + 0.1, 0)[1].id).toBe("GravityWell")
+				expect(m.nextSlot[2]).toBe(1)
+			end,
+		},
+		{
+			"with auto on, Blink jumps just far enough, only for a ball out of reach, and is not player activity",
+			function()
+				local m = Match.new(0, 1, { {}, { "Blink" } }, { auto = true })
+				m:serve(m.nextServeAt, 0, 0)
+				m.gauge[2] = 10
+				m.idle[2] = 1
+				local t = Trajectory.arrivalTime(m.shot) - 0.1
+				expect(#m:autoUse(2, t, m.shot.to.Z)).toBe(0)
+				local e = m:autoUse(2, t, m.shot.to.Z - 4)[1]
+				expect(e.id).toBe("Blink")
+				expect(e.dirZ).toBe(1)
+				expect(e.distance).toBeNear(4, 1e-9)
+				expect(m.idle[2]).toBe(1)
+			end,
+		},
+		{
 			"bots with abilities play full matches and use every ability",
 			function()
 				local seen = {}

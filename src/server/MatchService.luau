@@ -184,7 +184,8 @@ local function applyAbility(session: Session, e: Match.Event)
 	end
 end
 
--- Tutorial: 3 returns, then a PERFECT, then an ability. Points do not count.
+-- Tutorial: 3 returns, then a PERFECT, then a return with a full gauge
+-- (the ability fires by itself). Points do not count.
 local function advanceTutorial(session: Session, events: { Match.Event })
 	local tut = session.tutorial
 	local player = session.seats[1].player
@@ -222,6 +223,9 @@ local function advanceTutorial(session: Session, events: { Match.Event })
 		elseif e.kind == "Point" then
 			m.points = { 0, 0 }
 		end
+	end
+	if tut.step == "ability" then
+		m.usedThisRally[1] = false -- it may have gone off earlier in this rally
 	end
 	if tut.step == "ability" and m.gauge[1] < Config.Gauge.max then
 		-- keep the gauge full so the player can try an ability right away
@@ -349,6 +353,7 @@ local function begin(
 		origin = origin,
 		arena = Arena.build(origin, slot, arenaDef.id),
 		match = Match.new(now(), firstServer, { seats[1].loadout, seats[2].loadout }, {
+			auto = true,
 			windAt = if windy then Arenas.windAt else nil,
 			idleLimit = if mode == ONLINE or mode == RANKED then IDLE_LIMIT else nil,
 		}),
@@ -416,7 +421,7 @@ local function startPractice(player: Player, mode: string, loadout: { string }, 
 		return rng:NextNumber(a, b)
 	end, bl)
 	local seats = {
-		humanSeat(1, player, if tutorial then { "Curve", "Barrier" } else loadout),
+		humanSeat(1, player, if tutorial then { "Curve" } else loadout),
 		{ index = 2, bot = bot, lastSwing = 0, left = false, loadout = bl } :: Seat,
 	}
 	-- the player serves first against the wall, the Bot serves first in a match
@@ -626,29 +631,6 @@ local function onSwing(player: Player, reported: unknown, aim: unknown, myZ: unk
 	end)
 end
 
-local function seatOf(session: Session, player: Player): Seat?
-	for _, s in session.seats do
-		if s.player == player then
-			return s
-		end
-	end
-	return nil
-end
-
-local function onAbility(player: Player, slot: unknown, dirZ: unknown)
-	if slot ~= 1 and slot ~= 2 then
-		return
-	end
-	local d: number? = if type(dirZ) == "number" and dirZ == dirZ then dirZ else nil
-	later(function()
-		local session = byPlayer[player]
-		local seat = session and seatOf(session, player)
-		if session and seat then
-			dispatch(session, session.match:useAbility(seat.index, slot :: number, now(), d))
-		end
-	end)
-end
-
 local function step(dt: number)
 	local t = now()
 	for session in sessions do
@@ -671,22 +653,6 @@ local function step(dt: number)
 						table.insert(events, e)
 					end
 				end
-				if m.phase == "Rally" then
-					local slot, dir = bot:think({
-						now = t,
-						gauge = m.gauge[seat.index],
-						used = m.usedThisRally[seat.index],
-						armed = m.armed[seat.index],
-						barrier = m.barrier[seat.index],
-						receiving = m.receiver == seat.index,
-						shot = m.shot,
-					})
-					if slot then
-						for _, e in m:useAbility(seat.index, slot, t, dir) do
-							table.insert(events, e)
-						end
-					end
-				end
 				-- line the avatar's paddle up with where the bot stands
 				local side = Match.sideOf(seat.index)
 				local turn = if side == 1 then CFrame.identity else CFrame.Angles(0, math.pi, 0)
@@ -694,6 +660,11 @@ local function step(dt: number)
 				if seat.model then
 					seat.model:PivotTo(CFrame.new(at) * turn)
 				end
+			end
+		end
+		for _, seat in session.seats do
+			for _, e in m:autoUse(seat.index, t, seatZ(session, seat)) do
+				table.insert(events, e)
 			end
 		end
 		for _, e in m:update(t) do
@@ -717,7 +688,6 @@ function MatchService.start()
 		end
 	end)
 	Net.get(Net.SWING).OnServerEvent:Connect(onSwing)
-	Net.get(Net.USE_ABILITY).OnServerEvent:Connect(onAbility)
 	Net.get(Net.HELLO).OnServerEvent:Connect(function(player)
 		Analytics.funnel(player, "Joined")
 		task.spawn(function()
