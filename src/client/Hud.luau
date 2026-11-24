@@ -48,6 +48,28 @@ local function abilityColor(id: string): Color3
 	return if def then Color3.fromRGB(def.rgb[1], def.rgb[2], def.rgb[3]) else INK
 end
 
+-- Shows a text, then fades it out after `hold` seconds. Its outline has to fade as well: a
+-- UIStroke keeps its own transparency, so it would stay behind as black lettering.
+local fades: { [TextLabel]: { Tween } } = setmetatable({}, { __mode = "k" }) :: any
+local function showAndFade(l: TextLabel, hold: number, seconds: number)
+	for _, t in fades[l] or {} do
+		t:Cancel()
+	end
+	local info = TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, hold)
+	local tweens = {}
+	l.TextTransparency = 0
+	table.insert(tweens, TweenService:Create(l, info, { TextTransparency = 1 }))
+	local outline = l:FindFirstChildOfClass("UIStroke")
+	if outline then
+		outline.Transparency = 0.2
+		table.insert(tweens, TweenService:Create(outline, info, { Transparency = 1 }))
+	end
+	for _, t in tweens do
+		t:Play()
+	end
+	fades[l] = tweens
+end
+
 local Hud = {}
 
 local TOUCH_HIT_WIDTH = 228
@@ -648,8 +670,8 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	controls.Name = "Controls"
 	-- bottom left on computers; top left on phones, where the bottom left is the move stick
 	controls.AnchorPoint = Vector2.new(0, if UserInputService.TouchEnabled then 0 else 1)
-	controls.Position = if UserInputService.TouchEnabled then UDim2.fromOffset(14, 44) else UDim2.new(0, 14, 1, -76)
-	controls.Size = UDim2.fromOffset(270, 102)
+	controls.Position = if UserInputService.TouchEnabled then UDim2.fromOffset(14, 84) else UDim2.new(0, 14, 1, -76)
+	controls.Size = UDim2.fromOffset(if UserInputService.TouchEnabled then 215 else 270, 102)
 	controls.TextXAlignment = Enum.TextXAlignment.Left
 	controls.TextYAlignment = Enum.TextYAlignment.Top
 	controls.TextWrapped = true
@@ -669,7 +691,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local popupStroke = Instance.new("UIStroke")
 	popupStroke.Thickness = 3
 	popupStroke.Color = Color3.new(0, 0, 0)
-	popupStroke.Transparency = 0.4
+	popupStroke.Transparency = 1
 	popupStroke.Parent = popup
 	local popupSub = label(match, "", 18, INK, FONT_REGULAR)
 	popupSub.AnchorPoint = Vector2.new(0.5, 0)
@@ -679,7 +701,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	local subStroke = Instance.new("UIStroke")
 	subStroke.Thickness = 2
 	subStroke.Color = Color3.new(0, 0, 0)
-	subStroke.Transparency = 0.2
+	subStroke.Transparency = 1
 	subStroke.Parent = popupSub
 
 	local hint = label(match, "", 18, INK)
@@ -814,10 +836,16 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	announce.Position = UDim2.fromScale(0.5, 0.24)
 	announce.Size = UDim2.fromOffset(600, 34)
 	announce.TextTransparency = 1
+	announce.TextWrapped = true
+	if UserInputService.TouchEnabled then
+		-- between the how-to-play box and the ability slots
+		announce.Size = UDim2.fromOffset(300, 44)
+		announce.TextSize = 16
+	end
 	local announceStroke = Instance.new("UIStroke")
 	announceStroke.Thickness = 2
 	announceStroke.Color = Color3.new(0, 0, 0)
-	announceStroke.Transparency = 0.4
+	announceStroke.Transparency = 1
 	announceStroke.Parent = announce
 
 	-- special-move cut-in: a dark band with the move's name in white, edged in the move's colour
@@ -855,7 +883,7 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	static.ZIndex = 19
 	static.Visible = false
 	static.Parent = gui
-	for i = 1, 10 do
+	for i = 1, 5 do
 		local bar = Instance.new("Frame")
 		bar.Name = "Bar" .. i
 		bar.BorderSizePixel = 0
@@ -1362,13 +1390,11 @@ end
 function Hud.announceAbility(self: Hud, text: string, color: Color3)
 	self.announce.Text = text
 	self.announce.TextColor3 = color
-	self.announce.TextTransparency = 0
-	local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 2)
-	TweenService:Create(self.announce, info, { TextTransparency = 1 }):Play()
+	showAndFade(self.announce, 2, 0.6)
 end
 
 -- EMP: static over the whole screen for `seconds` (thin noise bars that jump around, and a
--- flickering grey veil). Only looks; the ball and its shadow keep being drawn underneath.
+-- faint grey veil). Only looks; the ball and its shadow keep being drawn underneath.
 function Hud.glitch(self: Hud, seconds: number)
 	local layer = self.static
 	layer.Visible = true
@@ -1384,12 +1410,12 @@ function Hud.glitch(self: Hud, seconds: number)
 			end
 			return
 		end
-		layer.BackgroundTransparency = 0.75 + math.random() * 0.2
+		layer.BackgroundTransparency = 0.9 + math.random() * 0.08
 		for _, bar in bars do
 			if bar:IsA("Frame") then
 				bar.Position = UDim2.fromScale(math.random() * 0.3 - 0.15, math.random())
-				bar.Size = UDim2.new(1.3, 0, 0, math.random(2, 14))
-				bar.BackgroundTransparency = 0.3 + math.random() * 0.5
+				bar.Size = UDim2.new(1.3, 0, 0, math.random(1, 4))
+				bar.BackgroundTransparency = 0.6 + math.random() * 0.3
 			end
 		end
 	end)
@@ -1405,8 +1431,8 @@ function Hud.cutIn(self: Hud, text: string, color: Color3)
 	self.cutToken += 1
 	local token = self.cutToken
 	self.cutEdge.Color = color
-	band.Size = if small then UDim2.fromOffset(340, 40) else UDim2.fromOffset(560, 60)
-	self.cutText.TextSize = if small then 22 else 34
+	band.Size = if small then UDim2.fromOffset(310, 36) else UDim2.fromOffset(560, 60)
+	self.cutText.TextSize = if small then 18 else 34
 	self.cutText.Text = text
 	band.Visible = true
 	band.Position = UDim2.fromScale(1.6, CUT_Y)
@@ -1520,7 +1546,6 @@ function Hud.popupGrade(self: Hud, grade: string, offset: number?)
 	local color = if grade == "Barrier" then abilityColor("Barrier") else (Palette.Grade[grade] or INK)
 	self.popup.Text = if S.has("grade." .. grade) then S.t("grade." .. grade) else grade
 	self.popup.TextColor3 = color
-	self.popup.TextTransparency = 0
 	self.popup.Size = UDim2.fromOffset(600, if grade == "Perfect" then 96 else 72)
 	self.popup.TextSize = if grade == "Perfect" then 72 else 54
 	local sub = ""
@@ -1529,20 +1554,16 @@ function Hud.popupGrade(self: Hud, grade: string, offset: number?)
 		sub = S.t(if offset < 0 then "hud.early" else "hud.late", { ms = ms })
 	end
 	self.popupSub.Text = sub
-	self.popupSub.TextTransparency = 0
-	local info = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.55)
-	TweenService:Create(self.popup, info, { TextTransparency = 1 }):Play()
-	TweenService:Create(self.popupSub, info, { TextTransparency = 1 }):Play()
+	showAndFade(self.popup, 0.55, 0.5)
+	showAndFade(self.popupSub, 0.55, 0.5)
 end
 
 function Hud.popupText(self: Hud, text: string, color: Color3)
 	self.popup.Text = text
 	self.popup.TextColor3 = color
 	self.popup.TextSize = 54
-	self.popup.TextTransparency = 0
 	self.popupSub.Text = ""
-	local info = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.5)
-	TweenService:Create(self.popup, info, { TextTransparency = 1 }):Play()
+	showAndFade(self.popup, 0.5, 0.9)
 end
 
 -- Round-trip time to the server, in milliseconds.

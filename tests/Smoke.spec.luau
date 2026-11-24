@@ -59,6 +59,15 @@ return function(loader, expect)
 				end
 				hud:popupText("POINT!", Color3 and Color3.new(1, 1, 1) or roblox.Color3.new(1, 1, 1))
 				hud:announceAbility("相手：カーブショット！", Hud.abilityColor("Curve"))
+				-- the outline fades out with each text (it used to stay behind as black lettering)
+				for _, l in { hud.announce, hud.popup, hud.popupSub } do
+					local outline = l:FindFirstChildOfClass("UIStroke")
+					local faded = false
+					for _, t in Fake.tweens do
+						faded = faded or (t.inst == outline and t.goal.Transparency == 1)
+					end
+					expect(faded).toBeTruthy()
+				end
 				hud:setPing(180)
 				hud:setRally(5)
 				hud:setHint("あなたのサーブ")

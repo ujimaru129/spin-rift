@@ -5,7 +5,7 @@
 
 local roblox = require("@lune/roblox")
 
-local Fake = {}
+local Fake = { tweens = {} }
 
 -- The fake server clock. Tests move it forward.
 Fake.clock = { now = 0 }
@@ -509,8 +509,9 @@ function Fake.globals(sharedNode: any)
 			LogCustomEvent = function() end,
 		},
 		TweenService = {
-			Create = function()
-				return { Play = function() end, Completed = Fake.signal() }
+			Create = function(_, inst, _, goal)
+				table.insert(Fake.tweens, { inst = inst, goal = goal })
+				return { Play = function() end, Cancel = function() end, Completed = Fake.signal() }
 			end,
 		},
 		UserInputService = {
