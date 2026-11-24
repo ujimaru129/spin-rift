@@ -574,14 +574,7 @@ local T: { [string]: Entry } = {
 	},
 	["point.you"] = { ja = "POINT!", en = "POINT!", es = "¡PUNTO!", pt = "PONTO!", ko = "득점!", id = "POIN!" },
 	["point.miss"] = { ja = "MISS", en = "MISS", es = "FALLO", pt = "ERROU", ko = "MISS", id = "MELESET" },
-	["point.whiff"] = {
-		ja = "空振り",
-		en = "Whiffed",
-		es = "Golpe al aire",
-		pt = "Furou",
-		ko = "헛스윙",
-		id = "Pukulan meleset",
-	},
+	["point.whiff"] = { ja = "MISS", en = "MISS", es = "FALLO", pt = "ERROU", ko = "MISS", id = "MELESET" },
 	["point.reach"] = { ja = "MISS", en = "MISS", es = "FALLO", pt = "ERROU", ko = "MISS", id = "MELESET" },
 	["point.lost"] = {
 		ja = "失点",
