@@ -237,7 +237,7 @@ local function traffic(parent: Instance)
 		local color = if onward then pick({ RED, ORANGE }) else pick({ WHITE, CYAN })
 		local lane = if onward then -2.4 else 2.4
 		table.insert(cars, {
-			part = box(parent, CFrame.new(0, 0, 0), Vector3.new(0.9, 0.5, r(3, 6)), color, true),
+			part = box(parent, CFrame.new(0, GROUND, 0), Vector3.new(0.9, 0.5, r(3, 6)), color, true),
 			path = path,
 			t = r(0, 1),
 			speed = (if onward then 1 else -1) * r(0.03, 0.06),
@@ -248,7 +248,13 @@ local function traffic(parent: Instance)
 		local x, y = r(90, 340), r(-20, 60)
 		local z = r(120, 260)
 		table.insert(cars, {
-			part = box(parent, CFrame.new(0, 0, 0), Vector3.new(0.7, 0.5, 3), pick({ RED, WHITE, CYAN, ORANGE }), true),
+			part = box(
+				parent,
+				CFrame.new(0, GROUND, 0),
+				Vector3.new(0.7, 0.5, 3),
+				pick({ RED, WHITE, CYAN, ORANGE }),
+				true
+			),
 			path = { Vector3.new(x, y, -z), Vector3.new(x + r(-40, 40), y, z) },
 			t = r(0, 1),
 			speed = (if i % 2 == 0 then 1 else -1) * r(0.03, 0.07),
