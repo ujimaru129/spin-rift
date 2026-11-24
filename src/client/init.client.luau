@@ -20,6 +20,7 @@ local Fx = require(script.Fx)
 local Audio = require(script.Audio)
 local Hud = require(script.Hud)
 local ArenaLook = require(script.ArenaLook)
+local City = require(script.City)
 local SeasonFolder = Shared:WaitForChild("Season")
 local Arenas = require(SeasonFolder:WaitForChild("Arenas"))
 local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
@@ -58,6 +59,7 @@ local cameraZ = 0
 local lastSwingSent = 0
 local selectedArena = Arenas.DEFAULT
 local bestRating = 1000
+local MENU_CITY = Vector3.new(0, 6, 0) -- the city behind the menu, round the spawn
 local windActive = false
 
 -- what the ability slots show
@@ -205,6 +207,7 @@ hud:showMenu()
 hud:setArenaButton(arenaButtonText())
 refreshSoundButtons()
 Audio.preload()
+City.show(MENU_CITY)
 Audio.music("menu")
 
 -- Left/Right arrow keys move across the table. Roblox's own controls give these keys to the
@@ -427,6 +430,7 @@ local function endMatchView()
 	windActive = false
 	hud:setWind(nil)
 	ArenaLook.apply(nil)
+	City.show(MENU_CITY)
 	ball:hide()
 	camera.CameraType = Enum.CameraType.Custom
 	camera.FieldOfView = 70
@@ -511,6 +515,11 @@ local function onEvent(e: { [string]: any })
 		hud:setControls(controlsText())
 		-- arena look, wind, and both players' cosmetics
 		ArenaLook.apply(e.arena)
+		if e.arena == "Sakura" then
+			City.show(nil)
+		else
+			City.show(e.origin, e.side)
+		end
 		windActive = e.wind == true
 		local looks = e.looks or {}
 		local function trailOf(look: any): Color3?

@@ -154,42 +154,6 @@ local function buildPlatform(model: Model, o: Vector3)
 	end
 end
 
--- Distant buildings with lit windows, as in the concept art.
-local function buildSkyline(model: Model, o: Vector3, seed: number)
-	local rng = Random.new(seed)
-	for i = 1, 36 do
-		local a = (i / 36) * math.pi * 2 + rng:NextNumber(-0.05, 0.05)
-		local r = rng:NextNumber(70, 140)
-		local w, d = rng:NextNumber(14, 26), rng:NextNumber(14, 26)
-		local h = rng:NextNumber(60, 140)
-		local topY = rng:NextNumber(-20, 60)
-		local at = o + Vector3.new(math.cos(a) * r, topY - h / 2, math.sin(a) * r)
-		local b = part(model, {
-			name = "Building",
-			size = Vector3.new(w, h, d),
-			cframe = CFrame.lookAt(at, Vector3.new(o.X, at.Y, o.Z)),
-			color = Color3.fromRGB(10, 12, 22),
-			collide = false,
-		})
-		-- window rows on the face that looks at the arena
-		local rows = math.floor(h / 5)
-		for k = 1, rows do
-			if rng:NextNumber() < 0.45 then
-				local warm = rng:NextNumber() < 0.65
-				local strip = part(model, {
-					name = "Windows",
-					size = Vector3.new(w * rng:NextNumber(0.3, 0.9), 0.9, 0.2),
-					cframe = b.CFrame * CFrame.new(rng:NextNumber(-w * 0.1, w * 0.1), -h / 2 + k * 5, -d / 2 - 0.1),
-					color = if warm then Palette.WindowWarm else Palette.WindowCool,
-					material = Enum.Material.Neon,
-					collide = false,
-				})
-				strip.Transparency = rng:NextNumber(0, 0.4)
-			end
-		end
-	end
-end
-
 -- Invisible walls that keep each player in their own half of the floor.
 local function buildZone(model: Model, o: Vector3)
 	local near, far = Config.HitX - 0.5, 18.5 -- |X| range a player may stand in
@@ -331,9 +295,7 @@ function Arena.build(origin: Vector3, seed: number, arenaId: string?): Model
 	if arenaId == "Sakura" then
 		tint(model, Palette.TeamA, SAKURA_GLOW)
 		buildSakura(model, origin, seed)
-	else
-		buildSkyline(model, origin, seed)
-	end
+	end -- the city round the Rooftop is drawn on each client (City)
 	buildZone(model, origin)
 	model.Parent = workspace
 	return model

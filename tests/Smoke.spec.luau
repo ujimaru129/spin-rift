@@ -167,6 +167,33 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"the city builds, follows the arena, turns for the other side, and stays a reasonable size",
+			function()
+				local City = loader.require("src/client/City")
+				local Ids = loader.require("src/shared/CityIds")
+				local saved = Ids.Windows
+				Ids.Windows = { "rbxassetid://1", "rbxassetid://2", "rbxassetid://3" }
+				City.show(Vector3.new(400, 200, 0), -1)
+				Ids.Windows = saved
+				local m = globals.workspace:FindFirstChild("SpinRiftCity")
+				local parts = #m:GetChildren()
+				expect(parts > 600 and parts < 2000).toBeTruthy()
+				expect(m.PrimaryPart.Position.X).toBe(400)
+				City.show(Vector3.new(0, 200, 0), 1)
+				-- nothing of the city reaches into the arena
+				for _, p in m:GetChildren() do
+					if p ~= m.PrimaryPart and p.Name == "Part" and p.Transparency ~= 1 then
+						local at = p.Position - Vector3.new(0, 200, 0)
+						local near = math.sqrt(at.X ^ 2 + at.Z ^ 2) < 24 and at.Y > -8
+						expect(near).toBe(false)
+					end
+				end
+				globals.game:GetService("RunService").Heartbeat:Fire(1 / 60)
+				City.show(nil)
+				expect(globals.workspace:FindFirstChild("SpinRiftCity")).toBe(nil)
+			end,
+		},
+		{
 			"picking abilities keeps the 2 most recent, and never empties the loadout",
 			function()
 				local hud = newHud()
@@ -270,7 +297,7 @@ return function(loader, expect)
 			function()
 				local origin = Vector3.new(400, 200, 0)
 				local model = Arena.build(origin, 1)
-				expect(#model:GetChildren() > 50).toBeTruthy()
+				expect(#model:GetChildren() > 20).toBeTruthy()
 				local bot = Arena.buildOpponent(origin)
 				bot:PivotTo(roblox.CFrame.new(origin))
 				for _, side in { -1, 1 } do
