@@ -34,7 +34,7 @@ AudioIds.Sfx = {
 }
 
 -- A second sheet for the ball itself: one sound every HIT_SLOT seconds.
-AudioIds.HitSheet = ""
+AudioIds.HitSheet = "rbxassetid://124496883304992"
 AudioIds.HIT_SLOT = 0.5
 AudioIds.Hits = { "Hit", "PerfectHit", "Bounce" }
 
