@@ -109,38 +109,44 @@ local function duck()
 	end)
 end
 
+-- One Sound per special move, made once and kept loaded: a Sound made at the moment it is needed
+-- has to load first and starts late.
+local sounds: { [string]: Sound } = {}
+local function sheetSound(name: string): Sound?
+	local from, to = AudioIds.region(name)
+	if AudioIds.Sheet == "" or not from or not to then
+		return nil
+	end
+	local s = sounds[name]
+	if not s then
+		s = Instance.new("Sound")
+		s.Name = name
+		s.SoundId = AudioIds.Sheet
+		s.SoundGroup = sfxGroup
+		s.PlaybackRegionsEnabled = true
+		s.PlaybackRegion = NumberRange.new(from, to)
+		s.Parent = SoundService
+		sounds[name] = s
+	end
+	return s
+end
+
 -- Plays one sound from the sheet. The opponent's are a little quieter. Returns whether it played.
 function Audio.sfx(name: string, theirs: boolean?): boolean
-	local from, to = AudioIds.region(name)
-	if not sfxOn or AudioIds.Sheet == "" or not from or not to then
+	local s = if sfxOn then sheetSound(name) else nil
+	if not s then
 		return false
 	end
 	duck()
-	local s = Instance.new("Sound")
-	s.Name = name
-	s.SoundId = AudioIds.Sheet
-	s.SoundGroup = sfxGroup
 	s.Volume = if theirs then SFX_VOLUME * 0.75 else SFX_VOLUME
-	s.PlaybackRegionsEnabled = true
-	s.PlaybackRegion = NumberRange.new(from, to)
-	s.Parent = SoundService
 	s:Play()
-	task.delay(AudioIds.SLOT + 1, function()
-		s:Destroy()
-	end)
 	return true
 end
 
--- Loads the sheet ahead of time, so the first special move is heard on time.
+-- Makes every sound ahead of time, so the first special move is heard on time.
 function Audio.preload()
-	if AudioIds.Sheet ~= "" then
-		task.spawn(function()
-			pcall(function()
-				local s = Instance.new("Sound")
-				s.SoundId = AudioIds.Sheet
-				game:GetService("ContentProvider"):PreloadAsync({ s })
-			end)
-		end)
+	for _, name in AudioIds.Sfx do
+		sheetSound(name)
 	end
 end
 

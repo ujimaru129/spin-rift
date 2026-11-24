@@ -46,6 +46,7 @@ local origin: Vector3? = nil
 local me = 1 -- our player index in the current match (1 stands on side -1)
 local mySide = -1
 local currentMode = "Wall"
+local opponentMode: string? = nil -- the Bot level of this match's opponent
 local stickAim = 0
 -- direction keys held right now (on screen): arrows move us ourselves, A/D move through Roblox
 local arrowLeft, arrowRight, keyA, keyD = false, false, false, false
@@ -503,6 +504,7 @@ local function onEvent(e: { [string]: any })
 		ball:setOrigin(e.origin)
 		ball:hide()
 		tutorialStep = nil
+		opponentMode = e.opponentMode
 		resultToken += 1
 		Audio.music(Audio.matchTrack(e.arena, e.ranked))
 		hud:showMatch(opponentLabel(e))
@@ -533,7 +535,7 @@ local function onEvent(e: { [string]: any })
 		setJump(false)
 	elseif kind == "Score" then
 		hud:setScore(e, me)
-		if origin and currentMode ~= "Wall" and Audio.current() ~= nil and Audio.matchPoint(e.points) then
+		if origin and opponentMode ~= "Wall" and Audio.current() ~= nil and Audio.matchPoint(e.points) then
 			Audio.music("final") -- stays on through a deuce
 		end
 		myGauge = e.gauge[me]
