@@ -263,6 +263,28 @@ local function traffic(parent: Instance)
 	end
 end
 
+-- The signs that frame the table, and the sight lines to them that other towers must not block.
+local BIG_SIGNS = {
+	{ x = 112, y = 12, z = -70, w = 30, h = 14, color = MAGENTA, label = "RIFT CITY" },
+	{ x = 120, y = 4, z = 78, w = 28, h = 12, color = CYAN, label = "SPIN DRIVE" },
+	{ x = 84, y = 16, z = -88, w = 8, h = 38, color = CYAN, label = "PULSE" },
+	{ x = 80, y = 14, z = 92, w = 8, h = 36, color = PINK, label = "SMASH" },
+}
+local EYE = Vector3.new(-28, 0, 0)
+
+local function blocksSign(x: number, z: number): boolean
+	local p = Vector3.new(x, 0, z)
+	for _, s in BIG_SIGNS do
+		local to = Vector3.new(s.x, 0, s.z)
+		local line = to - EYE
+		local t = math.clamp((p - EYE):Dot(line) / line:Dot(line), 0, 1.15)
+		if (p - (EYE + line * t)).Magnitude < 30 then
+			return true
+		end
+	end
+	return false
+end
+
 local LAYERS = {
 	{ n = 13, r0 = 105, r1 = 150, t0 = -34, t1 = 2, w0 = 16, w1 = 26 },
 	{ n = 28, r0 = 165, r1 = 240, t0 = -22, t1 = 34, w0 = 18, w1 = 32 },
@@ -291,7 +313,7 @@ local function build(): Model
 			if x > 0 and math.abs(z) > dist * 0.62 and layer <= 2 then
 				top += 26
 			end
-			if not open then
+			if not open and not (layer <= 2 and blocksSign(x, z)) then
 				building(m, x, z, r(l.w0, l.w1), r(l.w0, l.w1), top, layer <= 2)
 			end
 		end
@@ -339,14 +361,7 @@ local function build(): Model
 	end
 
 	-- the big signs that frame the table
-	for _, s in
-		{
-			{ x = 112, y = 12, z = -70, w = 30, h = 14, color = MAGENTA, label = "RIFT CITY" },
-			{ x = 120, y = 4, z = 78, w = 28, h = 12, color = CYAN, label = "SPIN DRIVE" },
-			{ x = 84, y = 16, z = -88, w = 8, h = 38, color = CYAN, label = "PULSE" },
-			{ x = 80, y = 14, z = 92, w = 8, h = 36, color = PINK, label = "SMASH" },
-		}
-	do
+	for _, s in BIG_SIGNS do
 		local cf = facing(s.x, s.y, s.z)
 		local top = s.y + s.h / 2 + 6
 		tower(m, facing(s.x, (top + GROUND) / 2, s.z) * CFrame.new(0, 0, 9), s.w + 8, top - GROUND, 16)

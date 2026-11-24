@@ -6,7 +6,7 @@ return {
 	TeamB = Color3.fromRGB(255, 43, 214), -- magenta, the opponent
 	TableTop = Color3.fromRGB(8, 20, 38),
 	Line = Color3.fromRGB(235, 245, 255),
-	Platform = Color3.fromRGB(14, 16, 26),
+	Platform = Color3.fromRGB(24, 26, 44),
 	Metal = Color3.fromRGB(26, 31, 46),
 	Shell = Color3.fromRGB(196, 206, 224),
 	Night = Color3.fromRGB(11, 13, 36),

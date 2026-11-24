@@ -190,6 +190,16 @@ return function(loader, expect)
 				end
 				globals.game:GetService("RunService").Heartbeat:Fire(1 / 60)
 				City.show(nil)
+				-- the Rooftop uses plain fog, Sakura gets its Atmosphere back
+				local Look = loader.require("src/client/ArenaLook")
+				local Lighting = globals.game:GetService("Lighting")
+				local air = globals.Instance.new("Atmosphere", Lighting)
+				Look.apply("Rooftop")
+				expect(air.Parent).toBe(nil)
+				Look.apply("Sakura")
+				expect(air.Parent).toBe(Lighting)
+				expect(Lighting.FogEnd > 10000).toBeTruthy()
+				air:Destroy()
 				expect(globals.workspace:FindFirstChild("SpinRiftCity")).toBe(nil)
 			end,
 		},

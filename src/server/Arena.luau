@@ -139,6 +139,34 @@ local function buildPlatform(model: Model, o: Vector3)
 	under.CanCollide = false
 	local core = disc(model, o + Vector3.new(0, -5.2, 0), 5, 0.6, Palette.TeamA, Enum.Material.Neon)
 	core.CanCollide = false
+	-- short marks of light round the edge of the floor
+	for k = 0, 15 do
+		local a = (k + 0.5) / 16 * math.pi * 2
+		part(model, {
+			name = "Mark",
+			size = Vector3.new(3, 0.06, 0.16),
+			cframe = CFrame.new(o) * CFrame.Angles(0, a, 0) * CFrame.new(19, 0.03, 0),
+			color = if k % 2 == 0 then Palette.TeamA else Palette.TeamB,
+			material = Enum.Material.Neon,
+			collide = false,
+		})
+	end
+	-- soft team-coloured light over each end, so the players stand out
+	for _, side in { -1, 1 } do
+		local lamp = part(model, {
+			name = "Lamp",
+			size = Vector3.one,
+			cframe = CFrame.new(o + Vector3.new(side * 17, 11, 0)),
+			color = Color3.new(1, 1, 1),
+			transparency = 1,
+			collide = false,
+		})
+		local light = Instance.new("PointLight")
+		light.Color = (if side == -1 then Palette.TeamA else Palette.TeamB):Lerp(Color3.new(1, 1, 1), 0.55)
+		light.Range = 26
+		light.Brightness = 1.6
+		light.Parent = lamp
+	end
 	-- floor rings around each player's zone
 	for _, side in { -1, 1 } do
 		local ring = disc(
