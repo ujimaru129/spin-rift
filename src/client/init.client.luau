@@ -207,6 +207,7 @@ hud:showMenu()
 hud:setArenaButton(arenaButtonText())
 refreshSoundButtons()
 Audio.preload()
+ArenaLook.apply(nil)
 City.show(MENU_CITY)
 Audio.music("menu")
 

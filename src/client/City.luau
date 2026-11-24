@@ -386,6 +386,34 @@ local function build(): Model
 	road(m, { v(120, -48, -220), v(120, -48, -60), v(125, -48, 60), v(130, -48, 220) }, 16, MAGENTA)
 	traffic(m)
 
+	-- the night sky: a ring of tall panels, glowing purple near the skyline
+	for i = 0, 23 do
+		local a = i / 24 * math.pi * 2
+		local at = Vector3.new(math.cos(a) * 700, 100, math.sin(a) * 700)
+		local panel = box(m, CFrame.lookAt(at, Vector3.new(0, 100, 0)), v(190, 520, 1), Color3.new(0, 0, 0))
+		panel.Name = "Sky"
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.LightInfluence = 0
+		gui.MaxDistance = 0
+		gui.CanvasSize = Vector2.new(64, 256)
+		local fill = Instance.new("Frame")
+		fill.Size = UDim2.fromScale(1, 1)
+		fill.BorderSizePixel = 0
+		fill.BackgroundColor3 = Color3.new(1, 1, 1)
+		local gradient = Instance.new("UIGradient")
+		gradient.Rotation = 90
+		gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(6, 7, 22)),
+			ColorSequenceKeypoint.new(0.35, Color3.fromRGB(20, 16, 56)),
+			ColorSequenceKeypoint.new(0.6, Color3.fromRGB(78, 30, 118)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 20, 80)),
+		})
+		gradient.Parent = fill
+		fill.Parent = gui
+		gui.Parent = panel
+	end
+
 	-- streets far below
 	box(m, CFrame.new(150, GROUND - 1, 0), Vector3.new(1400, 1, 1400), Color3.fromRGB(8, 8, 18)).Reflectance = 0.1
 	for i = 1, 60 do

@@ -4,8 +4,8 @@
 
 return {
 	Windows = {
-		"", -- warm
-		"", -- blue and magenta
-		"", -- cyan
+		"rbxassetid://75575050325560", -- warm
+		"rbxassetid://72514261678970", -- blue and magenta
+		"rbxassetid://95740457998534", -- cyan
 	} :: { string },
 }

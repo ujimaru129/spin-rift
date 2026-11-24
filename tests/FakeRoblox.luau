@@ -558,6 +558,7 @@ function Fake.globals(sharedNode: any)
 		NumberSequenceKeypoint = roblox.NumberSequenceKeypoint,
 		NumberRange = roblox.NumberRange,
 		ColorSequence = roblox.ColorSequence,
+		ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
 		TweenInfo = {
 			new = function(...)
 				return { ... }

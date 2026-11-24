@@ -16,6 +16,8 @@ type Look = {
 	haze: number,
 	density: number,
 	tint: Color3,
+	-- plain distance fog instead of the Atmosphere, which turns black at night
+	fog: { color: Color3, from: number, to: number }?,
 }
 
 local LOOKS: { [string]: Look } = {
@@ -23,8 +25,9 @@ local LOOKS: { [string]: Look } = {
 	Rooftop = {
 		clock = 0,
 		brightness = 1.2,
-		ambient = Color3.fromRGB(30, 34, 70),
-		outdoor = Color3.fromRGB(40, 40, 90),
+		ambient = Color3.fromRGB(62, 58, 100),
+		outdoor = Color3.fromRGB(62, 58, 100),
+		fog = { color = Color3.fromRGB(46, 22, 84), from = 70, to = 850 },
 		atmosphere = Color3.fromRGB(11, 13, 36),
 		decay = Color3.fromRGB(60, 20, 90),
 		haze = 1.6,
@@ -45,18 +48,26 @@ local LOOKS: { [string]: Look } = {
 	},
 }
 
+local atmosphere: Atmosphere? = nil
+
 function ArenaLook.apply(arenaId: string?)
 	local look = LOOKS[arenaId or "Rooftop"] or LOOKS.Rooftop
 	Lighting.ClockTime = look.clock
 	Lighting.Brightness = look.brightness
 	Lighting.Ambient = look.ambient
 	Lighting.OutdoorAmbient = look.outdoor
-	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
-	if atmosphere then
-		atmosphere.Color = look.atmosphere
-		atmosphere.Decay = look.decay
-		atmosphere.Haze = look.haze
-		atmosphere.Density = look.density
+	local fog = look.fog
+	Lighting.FogColor = if fog then fog.color else Color3.new(0, 0, 0)
+	Lighting.FogStart = if fog then fog.from else 0
+	Lighting.FogEnd = if fog then fog.to else 100000
+	local air = atmosphere or Lighting:FindFirstChildOfClass("Atmosphere")
+	atmosphere = air
+	if air then
+		air.Parent = if fog then nil else Lighting
+		air.Color = look.atmosphere
+		air.Decay = look.decay
+		air.Haze = look.haze
+		air.Density = look.density
 	end
 	local color = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
 	if color then
