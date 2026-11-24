@@ -12,6 +12,8 @@ local Trajectory = require(RallyFolder:WaitForChild("Trajectory"))
 local Abilities = require(RallyFolder:WaitForChild("Abilities"))
 local Palette = require(Shared:WaitForChild("Palette"))
 
+local Audio = require(script.Parent:WaitForChild("Audio"))
+
 local BallView = {}
 BallView.__index = BallView
 
@@ -40,18 +42,6 @@ export type BallView = typeof(setmetatable(
 	},
 	BallView
 ))
-
-local function sound(parent: Instance, speed: number, volume: number)
-	local s = Instance.new("Sound")
-	s.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-	s.PlaybackSpeed = speed
-	s.Volume = volume
-	s.Parent = parent
-	s:Play()
-	s.Ended:Once(function()
-		s:Destroy()
-	end)
-end
 
 function BallView.new(): BallView
 	local folder = Instance.new("Folder")
@@ -285,7 +275,6 @@ end
 
 function BallView.flashAt(self: BallView, worldPos: Vector3, color: Color3)
 	self:ring(worldPos, color, 6, Vector3.yAxis)
-	sound(self.folder, 1.6, 0.5)
 end
 
 -- An expanding neon ring, used for hits and bounces.
@@ -316,7 +305,7 @@ function BallView.hitEffect(self: BallView, grade: string)
 	local color = Palette.Grade[grade] or Color3.new(1, 1, 1)
 	local pos = self.ball.Position
 	self:ring(pos, color, if grade == "Perfect" then 6 else 3.5, Vector3.xAxis)
-	sound(self.ball, if grade == "Perfect" then 1.35 else 1.1, if grade == "Perfect" then 0.9 else 0.6)
+	Audio.ball(if grade == "Perfect" then "PerfectHit" else "Hit")
 end
 
 function BallView.update(self: BallView, now: number, dt: number)
@@ -395,7 +384,7 @@ function BallView.update(self: BallView, now: number, dt: number)
 			self.bounced = true
 			local b = self.origin + Trajectory.bouncePoint(shot) - Vector3.new(0, Config.Ball.radius - 0.05, 0)
 			self:ring(b, Palette.Shot[shot.kind] or Color3.new(1, 1, 1), 2.2, Vector3.yAxis)
-			sound(self.ball, 0.75, 0.35)
+			Audio.ball("Bounce")
 		end
 	end
 	self.lastPos = pos

@@ -33,6 +33,20 @@ AudioIds.Sfx = {
 	"Lose",
 }
 
+-- A second sheet for the ball itself: one sound every HIT_SLOT seconds.
+AudioIds.HitSheet = ""
+AudioIds.HIT_SLOT = 0.5
+AudioIds.Hits = { "Hit", "PerfectHit", "Bounce" }
+
+function AudioIds.hitRegion(name: string): (number?, number?)
+	local i = table.find(AudioIds.Hits, name)
+	if not i then
+		return nil, nil
+	end
+	local from = (i - 1) * AudioIds.HIT_SLOT
+	return from, from + AudioIds.HIT_SLOT - 0.05
+end
+
 -- Where a sound sits in the sheet, in seconds (nil when there is none by that name).
 function AudioIds.region(name: string): (number?, number?)
 	local i = table.find(AudioIds.Sfx, name)

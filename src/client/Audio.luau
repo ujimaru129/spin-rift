@@ -113,15 +113,20 @@ end
 -- has to load first and starts late.
 local sounds: { [string]: Sound } = {}
 local function sheetSound(name: string): Sound?
+	local sheet = AudioIds.Sheet
 	local from, to = AudioIds.region(name)
-	if AudioIds.Sheet == "" or not from or not to then
+	if not from then
+		sheet = AudioIds.HitSheet
+		from, to = AudioIds.hitRegion(name)
+	end
+	if sheet == "" or not from or not to then
 		return nil
 	end
 	local s = sounds[name]
 	if not s then
 		s = Instance.new("Sound")
 		s.Name = name
-		s.SoundId = AudioIds.Sheet
+		s.SoundId = sheet
 		s.SoundGroup = sfxGroup
 		s.PlaybackRegionsEnabled = true
 		s.PlaybackRegion = NumberRange.new(from, to)
@@ -143,10 +148,21 @@ function Audio.sfx(name: string, theirs: boolean?): boolean
 	return true
 end
 
+-- The ball: "Hit", "PerfectHit" or "Bounce". Always on (Blind Bounce is read by ear).
+function Audio.ball(name: string)
+	local s = sheetSound(name)
+	if s then
+		s.Volume = if name == "Bounce" then 0.5 else 0.8
+		s:Play()
+	end
+end
+
 -- Makes every sound ahead of time, so the first special move is heard on time.
 function Audio.preload()
-	for _, name in AudioIds.Sfx do
-		sheetSound(name)
+	for _, list in { AudioIds.Sfx, AudioIds.Hits } do
+		for _, name in list do
+			sheetSound(name)
+		end
 	end
 end
 

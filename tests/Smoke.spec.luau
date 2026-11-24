@@ -130,6 +130,14 @@ return function(loader, expect)
 				for _, def in Abilities.List do
 					expect(Ids.region(def.id) ~= nil).toBeTruthy()
 				end
+				for _, name in { "Hit", "PerfectHit", "Bounce" } do
+					expect(Ids.hitRegion(name) ~= nil).toBeTruthy()
+				end
+				local hits = Ids.HitSheet
+				Ids.HitSheet = "rbxassetid://3"
+				Audio.ball("Bounce")
+				expect(SoundService:FindFirstChild("Bounce").PlaybackRegion.Min).toBe(1)
+				Ids.HitSheet = hits
 				expect(Audio.matchPoint({ 4, 3 })).toBe(true)
 				expect(Audio.matchPoint({ 4, 4 })).toBe(false)
 				expect(Audio.matchPoint({ 5, 6 })).toBe(true)

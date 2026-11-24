@@ -540,6 +540,20 @@ def s_lose():
     return put(*jingle([(0, (67, 63), 0.35), (0.4, (65, 62), 0.35), (0.8, (63, 60), 0.35), (1.2, (55, 59, 62), 1.3)], "square"), (1.2, boom(0.9, 45, 1), 0.5))
 
 
+def h_hit():
+    t = t_(0.16)
+    return put((0, env(filt(noise(0.03), [1200, 9000], "band"), 0.0005, 0.008), 0.9), (0, env(np.sin(2 * np.pi * 1150 * t) + 0.5 * np.sin(2 * np.pi * 2300 * t), 0.0005, 0.03), 0.6), (0, env(np.sin(2 * np.pi * 420 * t), 0.0005, 0.02), 0.5))
+
+
+def h_perfect():
+    return put((0, h_hit(), 1.0), (0, boom(0.25, 95, 1.5), 0.4), (0, env(bell(91, 0.42, 0.14), 0.001, 0.14), 0.5), (0.01, env(bell(98, 0.4, 0.12), 0.001, 0.12), 0.35))
+
+
+def h_bounce():
+    t = t_(0.12)
+    return put((0, env(np.sin(2 * np.pi * 780 * t) + 0.4 * np.sin(2 * np.pi * 1560 * t), 0.0005, 0.018), 0.8), (0, env(filt(noise(0.02), 5000), 0.0005, 0.006), 0.4))
+
+
 SFX = [("Curve", s_curve), ("Smash", s_smash), ("Phantom", s_phantom), ("Blind", s_blind), ("TimeSlow", s_slow), ("Barrier", s_barrier),
        ("GravityWell", s_gravity), ("Blink", s_blink), ("Zigzag", s_zigzag), ("QuantumStop", s_quantum), ("Meteor", s_meteor), ("EMP", s_emp),
        ("BarrierHit", s_barrierhit), ("Win", s_win), ("Lose", s_lose)]
@@ -588,3 +602,10 @@ if __name__ == "__main__":
             sheet[a : a + len(x)] = x
             print("  ", n, f"peak {np.abs(x).max():.2f}")
         save("sfx", sheet)
+    if not want or "hits" in want:
+        n = int(0.5 * SR)
+        sheet = np.zeros((3 * n, 2))
+        for i, fn in enumerate((h_hit, h_perfect, h_bounce)):
+            x = fn()[: int(0.43 * SR)]
+            sheet[i * n : i * n + len(x)] = (0.8 * x / np.abs(x).max())[:, None]
+        save("hits", sheet)
