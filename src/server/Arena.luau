@@ -163,8 +163,8 @@ local function buildPlatform(model: Model, o: Vector3)
 		})
 		local light = Instance.new("PointLight")
 		light.Color = (if side == -1 then Palette.TeamA else Palette.TeamB):Lerp(Color3.new(1, 1, 1), 0.55)
-		light.Range = 26
-		light.Brightness = 1.6
+		light.Range = 14 -- short of the table: its shine would hide the ball
+		light.Brightness = 2
 		light.Parent = lamp
 	end
 	-- floor rings around each player's zone
