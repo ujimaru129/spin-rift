@@ -21,7 +21,7 @@ Config.HitX = 11
 Config.HitY = 4.4
 
 -- How far (in Z) the ball may land from the player and still be returned.
-Config.Reach = 2.4
+Config.Reach = 3.2
 
 -- Timing windows, in seconds either side of the moment the ball reaches the paddle.
 -- Perfect gives a fast shot and +2 gauge, Good a normal shot, Weak a slow, high, easy ball.

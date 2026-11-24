@@ -367,7 +367,7 @@ function Match.autoUse(self: Match, index: number, now: number, playerZ: number)
 	local left = Trajectory.arrivalTime(shot) - now
 	local receiving = self.receiver == index
 	local gap = shot.to.Z - playerZ
-	local far = math.abs(gap) > Config.Reach
+	local far = math.abs(gap) > Abilities.Auto.blinkGap
 	local rules = Abilities.Auto
 	local go = false
 	if def.id == "GravityWell" or def.id == "EMP" then

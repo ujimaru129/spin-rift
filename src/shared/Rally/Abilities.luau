@@ -36,7 +36,8 @@ Abilities.Tuning = {
 
 -- When instant abilities fire by themselves (see Match.autoUse).
 Abilities.Auto = {
-	blinkBefore = 0.3, -- seconds before an out-of-reach ball arrives
+	blinkBefore = 0.3, -- seconds before a far ball arrives
+	blinkGap = 2.4, -- studs to the ball that count as far (a little inside Config.Reach, so it comes in time)
 	barrierBefore = 0.3,
 	barrierPace = 0.3, -- a ball this much faster than a fresh rally counts as dangerous
 	slowAfter = 0.1, -- seconds after the opponent's hit
@@ -120,7 +121,7 @@ local LIST: { Def } = {
 		kind = "instant",
 		cost = 2,
 		rgb = { 125, 255, 154 },
-		effect = "球に届かないとき、球のほうへ最大6スタッド瞬間移動する",
+		effect = "球が遠いとき、球のほうへ最大6スタッド瞬間移動する",
 		counter = "―",
 	},
 	{

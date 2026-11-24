@@ -573,14 +573,7 @@ local T: { [string]: Entry } = {
 		id = "Perisaimu akan menyelamatkannya!",
 	},
 	["point.you"] = { ja = "POINT!", en = "POINT!", es = "¡PUNTO!", pt = "PONTO!", ko = "득점!", id = "POIN!" },
-	["point.miss"] = {
-		ja = "取れなかった",
-		en = "Missed it",
-		es = "No llegaste",
-		pt = "Não alcançou",
-		ko = "놓쳤다",
-		id = "Tidak terkejar",
-	},
+	["point.miss"] = { ja = "MISS", en = "MISS", es = "FALLO", pt = "ERROU", ko = "MISS", id = "MELESET" },
 	["point.whiff"] = {
 		ja = "空振り",
 		en = "Whiffed",
@@ -589,14 +582,7 @@ local T: { [string]: Entry } = {
 		ko = "헛스윙",
 		id = "Pukulan meleset",
 	},
-	["point.reach"] = {
-		ja = "届かなかった",
-		en = "Out of reach",
-		es = "Fuera de alcance",
-		pt = "Fora de alcance",
-		ko = "닿지 않았다",
-		id = "Tidak terjangkau",
-	},
+	["point.reach"] = { ja = "MISS", en = "MISS", es = "FALLO", pt = "ERROU", ko = "MISS", id = "MELESET" },
 	["point.lost"] = {
 		ja = "失点",
 		en = "Point lost",
@@ -1179,7 +1165,7 @@ local ABILITY: { [string]: { [string]: AbilityText } } = {
 		id = { name = "Sumur Gravitasi", role = "Hambat", effect = "Lawan bergerak setengah kecepatan selama 4 dtk" },
 	},
 	Blink = {
-		en = { name = "Blink", role = "Move", effect = "When a ball is out of reach, teleport up to 6 studs toward it" },
+		en = { name = "Blink", role = "Move", effect = "When a ball is far, teleport up to 6 studs toward it" },
 		es = {
 			name = "Parpadeo",
 			role = "Movimiento",
