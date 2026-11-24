@@ -32,6 +32,8 @@ return function(loader, expect)
 				table.insert(calls, "swing:" .. tostring(aim))
 			end,
 			onLanguage = function() end,
+			onMusic = function() end,
+			onSfx = function() end,
 			onFeedback = function() end,
 			onArena = function() end,
 			onBuyPremium = function() end,
@@ -103,6 +105,57 @@ return function(loader, expect)
 				local bar = hud.slots[1].frame.Parent
 				expect(bar.Position.Y.Offset < button.Position.Y.Offset - button.Size.Y.Offset).toBeTruthy()
 				expect(hud.slots[2].frame.Position.X.Offset > hud.slots[1].frame.Position.X.Offset).toBeTruthy()
+			end,
+		},
+		{
+			"on phones the scoreboard stays clear of Roblox's buttons, the menu button and the ability slots",
+			function()
+				for _, screen in { { 748, 382 }, { 844, 390 }, { 667, 375 }, { 640, 360 }, { 568, 320 }, { 1024, 768 } } do
+					local x, width = Hud.touchScoreboard(roblox.Vector2.new(screen[1], screen[2]))
+					local right = x + width
+					expect(x >= 216).toBeTruthy()
+					expect(right <= screen[1] - 118).toBeTruthy()
+					-- either ends above the slots, or left of them
+					local above = 8 + 48 <= screen[2] - 312
+					expect(above or right <= screen[1] - 252 or width == 150).toBeTruthy()
+				end
+			end,
+		},
+		{
+			"each special move has its own sound, scenes pick their music, and the buttons say on or off",
+			function()
+				local Ids = loader.require("src/shared/AudioIds")
+				local Audio = loader.require("src/client/Audio")
+				local SoundService = globals.game:GetService("SoundService")
+				for _, def in Abilities.List do
+					expect(Ids.region(def.id) ~= nil).toBeTruthy()
+				end
+				expect(Audio.matchPoint({ 4, 3 })).toBe(true)
+				expect(Audio.matchPoint({ 4, 4 })).toBe(false)
+				expect(Audio.matchPoint({ 5, 6 })).toBe(true)
+				expect(Audio.matchPoint({ 3, 0 })).toBe(false)
+				expect(Audio.matchTrack("Sakura", false)).toBe("Sakura")
+				expect(Audio.matchTrack("Sakura", true)).toBe("ranked")
+				expect(Audio.matchTrack(nil, nil)).toBe("Rooftop")
+				local sheet, menu = Ids.Sheet, Ids.Music.menu
+				Ids.Sheet = ""
+				expect(Audio.sfx("Smash")).toBe(false) -- no file yet: silent, no error
+				Ids.Sheet, Ids.Music.menu = "rbxassetid://1", "rbxassetid://2"
+				Audio.music(nil)
+				Audio.music("menu")
+				expect(SoundService:FindFirstChild("menu").Looped).toBe(true)
+				expect(Audio.sfx("Smash", true)).toBe(true)
+				expect(SoundService:FindFirstChild("Smash").PlaybackRegion.Min).toBe(3)
+				expect(Audio.toggleSfx()).toBe(false)
+				expect(Audio.sfx("Smash")).toBe(false)
+				Audio.toggleSfx()
+				expect(Audio.toggleMusic()).toBe(false)
+				Audio.toggleMusic()
+				Ids.Sheet, Ids.Music.menu = sheet, menu
+				local hud = newHud()
+				hud:setSoundButtons(true, false)
+				expect(hud.musicButton.Text).toBe("音楽：オン")
+				expect(hud.sfxButton.Text).toBe("必殺技の音：オフ")
 			end,
 		},
 		{

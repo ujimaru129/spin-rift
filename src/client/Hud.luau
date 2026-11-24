@@ -34,6 +34,8 @@ export type Callbacks = {
 	onSwingButton: (screenAim: number) -> (), -- -1 left, 0 straight, 1 right (on screen)
 	onLeaderboard: (scope: string) -> (),
 	onLanguage: () -> (),
+	onMusic: () -> (),
+	onSfx: () -> (),
 	onFeedback: (category: string, text: string) -> (),
 	onArena: () -> (),
 	onBuyPremium: () -> (),
@@ -73,6 +75,20 @@ end
 local Hud = {}
 
 local TOUCH_HIT_WIDTH = 228
+
+-- Phones: the scoreboard fits between Roblox's own buttons (top left) and the menu button, and
+-- ends above the ability slots. On a screen too short for that it stays left of the slots.
+local TOUCH_BOARD_HEIGHT = 48
+local TOUCH_TOP_LEFT = 216 -- right edge of Roblox's buttons, plus a gap
+local TOUCH_SLOTS_TOP = 312 -- the ability slots' top edge, from the bottom of the screen
+function Hud.touchScoreboard(screen: Vector2): (number, number)
+	local clearOfSlots = screen.Y - TOUCH_SLOTS_TOP >= 8 + TOUCH_BOARD_HEIGHT + 4
+	local right = screen.X - (if clearOfSlots then 14 + 96 + 8 else 24 + TOUCH_HIT_WIDTH + 8)
+	local width = math.clamp(right - TOUCH_TOP_LEFT, 150, 300)
+	-- as near the middle of the screen as it can be
+	local x = math.clamp((screen.X - width) / 2, TOUCH_TOP_LEFT, math.max(right - width, TOUCH_TOP_LEFT))
+	return x, width
+end
 
 -- Which part of the wide touch HIT button was pressed: -1 (left third), 0 (middle), 1 (right).
 function Hud.touchAim(touchX: number, buttonX: number, buttonWidth: number): number
@@ -149,6 +165,8 @@ export type Hud = typeof(setmetatable(
 		resultNote: TextLabel,
 		rankLine: TextLabel,
 		arenaButton: TextButton,
+		musicButton: TextButton,
+		sfxButton: TextButton,
 		wind: TextLabel,
 		myName: TextLabel,
 		pass: Frame,
@@ -395,6 +413,13 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 
 	local extras = row(menu, 36)
 	local seasonRow = row(menu, 36)
+	local soundRow = row(menu, 36)
+	local musicButton = button(soundRow, "", Palette.TeamA, callbacks.onMusic)
+	local sfxButton = button(soundRow, "", Palette.TeamA, callbacks.onSfx)
+	for _, b in { musicButton, sfxButton } do
+		b.Size = UDim2.new(0.5, -3, 1, 0)
+		b.TextSize = 14
+	end
 
 	-- leaderboard
 	local leaderboard = panel(gui, "Leaderboard")
@@ -556,19 +581,36 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	scoreboard.AnchorPoint = Vector2.new(0.5, 0)
 	scoreboard.Position = UDim2.new(0.5, 0, 0, 14)
 	scoreboard.Size = UDim2.new(0, 360, 0, 66)
+	local touch = UserInputService.TouchEnabled
+	if touch then
+		local function place()
+			local x, width = Hud.touchScoreboard(gui.AbsoluteSize or Vector2.new(748, 382))
+			scoreboard.Position = UDim2.fromOffset(x, 8)
+			scoreboard.Size = UDim2.fromOffset(width, TOUCH_BOARD_HEIGHT)
+		end
+		gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
+		scoreboard.AnchorPoint = Vector2.new(0, 0)
+		place()
+	end
 	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 14)
-	pad.PaddingRight = UDim.new(0, 14)
+	pad.PaddingLeft = UDim.new(0, if touch then 8 else 14)
+	pad.PaddingRight = UDim.new(0, if touch then 8 else 14)
 	pad.Parent = scoreboard
+	-- half the room the points take in the middle
+	local mid = if touch then 36 else 60
 
 	local function side(xScale: number, color: Color3, align: Enum.TextXAlignment)
-		local n = label(scoreboard, "", 14, color)
-		n.Position = UDim2.new(xScale, 0, 0, 8)
-		n.Size = UDim2.new(0.5, -60, 0, 18)
+		local n = label(scoreboard, "", if touch then 12 else 14, color)
+		n.Position = UDim2.new(xScale, 0, 0, if touch then 5 else 8)
+		n.Size = UDim2.new(0.5, -mid, 0, 18)
+		if touch then
+			n.TextWrapped = false
+			n.TextTruncate = Enum.TextTruncate.AtEnd
+		end
 		n.TextXAlignment = align
 		local games = label(scoreboard, "", 13, INK_DIM, FONT_REGULAR)
-		games.Position = UDim2.new(xScale, 0, 0, 38)
-		games.Size = UDim2.new(0.5, -60, 0, 18)
+		games.Position = UDim2.new(xScale, 0, 0, if touch then 26 else 38)
+		games.Size = UDim2.new(0.5, -mid, 0, 18)
 		games.TextXAlignment = align
 		local serve = Instance.new("Frame")
 		serve.Size = UDim2.fromOffset(8, 8)
@@ -576,20 +618,20 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		serve.BorderSizePixel = 0
 		serve.Position = if align == Enum.TextXAlignment.Left
 			then UDim2.new(xScale, 0, 0, 30)
-			else UDim2.new(xScale, 0, 0, 30) + UDim2.new(0.5, -68, 0, 0)
+			else UDim2.new(xScale, 0, 0, 30) + UDim2.new(0.5, -8, 0, 0)
 		serve.Parent = scoreboard
 		corner(serve, 4)
 		return n, games, serve
 	end
 	local myName, myGames, myServe = side(0, Palette.TeamA, Enum.TextXAlignment.Left)
 	local theirName, theirGames, theirServe = side(0.5, Palette.TeamB, Enum.TextXAlignment.Right)
-	theirName.Position += UDim2.fromOffset(60, 0)
-	theirGames.Position += UDim2.fromOffset(60, 0)
+	theirName.Position += UDim2.fromOffset(mid, 0)
+	theirGames.Position += UDim2.fromOffset(mid, 0)
 
 	local score = label(scoreboard, "", 34, INK)
 	score.AnchorPoint = Vector2.new(0.5, 0.5)
 	score.Position = UDim2.fromScale(0.5, 0.5)
-	score.Size = UDim2.fromOffset(120, 40)
+	score.Size = UDim2.fromOffset(if touch then 72 else 120, 40)
 	local myPoints = label(score, "0", 34, INK)
 	myPoints.Size = UDim2.new(0.5, -8, 1, 0)
 	myPoints.TextXAlignment = Enum.TextXAlignment.Right
@@ -954,6 +996,8 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		resultNote = resultNote,
 		rankLine = rankLine,
 		arenaButton = arenaButton,
+		musicButton = musicButton,
+		sfxButton = sfxButton,
 		wind = wind,
 		myName = myName,
 		pass = pass,
@@ -1090,6 +1134,11 @@ end
 -- " · <title>" for a title id, "" for none.
 function Hud.titleSuffix(id: string?): string
 	return if id and id ~= "" then " · " .. S.item(id) else ""
+end
+
+function Hud.setSoundButtons(self: Hud, music: boolean, sfx: boolean)
+	self.musicButton.Text = S.t(if music then "menu.musicOn" else "menu.musicOff")
+	self.sfxButton.Text = S.t(if sfx then "menu.sfxOn" else "menu.sfxOff")
 end
 
 function Hud.setArenaButton(self: Hud, text: string)

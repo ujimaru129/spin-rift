@@ -17,6 +17,7 @@ local Matchmaker = require(Shared:WaitForChild("Rank"):WaitForChild("Matchmaker"
 local S = require(Shared:WaitForChild("Strings"))
 local BallView = require(script.BallView)
 local Fx = require(script.Fx)
+local Audio = require(script.Audio)
 local Hud = require(script.Hud)
 local ArenaLook = require(script.ArenaLook)
 local SeasonFolder = Shared:WaitForChild("Season")
@@ -146,6 +147,10 @@ local function arenaButtonText(): string
 end
 
 local hud
+local function refreshSoundButtons()
+	local music, sfx = Audio.isOn()
+	hud:setSoundButtons(music, sfx)
+end
 hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 	onMode = function(mode: string)
 		currentMode = mode
@@ -165,6 +170,15 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 		S.setLocale(S.nextLocale())
 		hud:relabel()
 		hud:setArenaButton(arenaButtonText())
+		refreshSoundButtons()
+	end,
+	onMusic = function()
+		Audio.toggleMusic()
+		refreshSoundButtons()
+	end,
+	onSfx = function()
+		Audio.toggleSfx()
+		refreshSoundButtons()
 	end,
 	onArena = function()
 		local i = 1
@@ -188,6 +202,9 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 })
 hud:showMenu()
 hud:setArenaButton(arenaButtonText())
+refreshSoundButtons()
+Audio.preload()
+Audio.music("menu")
 
 -- Left/Right arrow keys move across the table. Roblox's own controls give these keys to the
 -- camera, which our match camera does not use, so we steer the character while they are held.
@@ -334,6 +351,7 @@ local function specialFx(e: { [string]: any }, color: Color3, title: string)
 		return
 	end
 	hud:cutIn(title, color)
+	Audio.sfx(e.id, e.player ~= me)
 	ball:reveal(now() + 1.2)
 	shake = 0.2
 	flashFov(4)
@@ -391,6 +409,7 @@ local function onAbilityEvent(e: { [string]: any })
 			end
 		end
 	elseif e.state == "triggered" then
+		Audio.sfx("BarrierHit", not mine)
 		hud:announceAbility(S.t("ability.barrierFired", { who = who }), color)
 		clearBarrier(e.player)
 	elseif e.state == "expired" then
@@ -399,7 +418,10 @@ local function onAbilityEvent(e: { [string]: any })
 	refreshSlots()
 end
 
+local resultToken = 0
 local function endMatchView()
+	resultToken += 1
+	Audio.music("menu")
 	origin = nil
 	windActive = false
 	hud:setWind(nil)
@@ -481,6 +503,8 @@ local function onEvent(e: { [string]: any })
 		ball:setOrigin(e.origin)
 		ball:hide()
 		tutorialStep = nil
+		resultToken += 1
+		Audio.music(Audio.matchTrack(e.arena, e.ranked))
 		hud:showMatch(opponentLabel(e))
 		hud:setControls(controlsText())
 		-- arena look, wind, and both players' cosmetics
@@ -509,6 +533,9 @@ local function onEvent(e: { [string]: any })
 		setJump(false)
 	elseif kind == "Score" then
 		hud:setScore(e, me)
+		if origin and currentMode ~= "Wall" and Audio.current() ~= nil and Audio.matchPoint(e.points) then
+			Audio.music("final") -- stays on through a deuce
+		end
 		myGauge = e.gauge[me]
 		nextSlot = if e.nextSlot then e.nextSlot[me] else nextSlot
 		refreshSlots()
@@ -568,6 +595,16 @@ local function onEvent(e: { [string]: any })
 			else nil
 		ball:hide()
 		local final = if e.points and Config.Score.gamesToWinMatch <= 1 then e.points else e.games
+		-- the result jingle plays alone; the menu music comes back a little later
+		Audio.music(nil)
+		Audio.sfx(if e.winner == me then "Win" else "Lose")
+		resultToken += 1
+		local token = resultToken
+		task.delay(4, function()
+			if token == resultToken then
+				Audio.music("menu")
+			end
+		end)
 		hud:showResult(e.winner == me, final[me], final[them()], note)
 	elseif kind == "Left" then
 		clearBarrier(1)

@@ -14,3 +14,7 @@ sourcemap.json
 # Editors / OS
 .DS_Store
 Thumbs.db
+
+# Made by tools/audio/make.py
+assets/audio/
+__pycache__/

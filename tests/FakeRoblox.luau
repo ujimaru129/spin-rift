@@ -514,6 +514,8 @@ function Fake.globals(sharedNode: any)
 				return { Play = function() end, Cancel = function() end, Completed = Fake.signal() }
 			end,
 		},
+		SoundService = Instance.new("SoundService"),
+		ContentProvider = { PreloadAsync = function() end },
 		UserInputService = {
 			TouchEnabled = false,
 			MouseEnabled = true,
