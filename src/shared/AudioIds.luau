@@ -5,15 +5,15 @@
 local AudioIds = {}
 
 AudioIds.Music = {
-	menu = "",
-	Rooftop = "",
-	Sakura = "",
-	ranked = "",
-	final = "",
+	menu = "rbxassetid://124393392092962",
+	Rooftop = "rbxassetid://91638357276707",
+	Sakura = "rbxassetid://70830084292749",
+	ranked = "rbxassetid://111298671390613",
+	final = "rbxassetid://128486904618584",
 } :: { [string]: string }
 
 -- One sheet holds every special-move sound: one each SLOT seconds, in this order.
-AudioIds.Sheet = ""
+AudioIds.Sheet = "rbxassetid://128938304580471"
 AudioIds.SLOT = 3
 AudioIds.Sfx = {
 	"Curve",
