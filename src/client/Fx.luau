@@ -259,6 +259,26 @@ function Fx.special(
 				Fx.shockwave(parent, at, color, 6 + 6 * k, 0.35)
 			end)
 		end
+	elseif id == "Feint" and towards then
+		-- a bolt that heads one way and a ghost bolt the other
+		local mirror = Vector3.new(towards.X, towards.Y, at.Z - (towards.Z - at.Z))
+		Fx.lightning(parent, at, mirror, color, 4)
+		later(0.12, function()
+			Fx.lightning(parent, at, towards, Color3.new(1, 1, 1), 4)
+		end)
+	elseif id == "SpinKick" then
+		for k = 1, 4 do
+			later(0.07 * k, function()
+				Fx.shockwave(parent, at, color, 3 + 2.5 * k, 0.3)
+			end)
+		end
+		Fx.burst(parent, at, Color3.new(1, 1, 1), 30, 30)
+	elseif id == "Drain" then
+		-- a pull from the opponent's side back to the user
+		if towards then
+			Fx.lightning(parent, towards, at, color, 6)
+		end
+		Fx.pillar(parent, at, color)
 	end
 end
 

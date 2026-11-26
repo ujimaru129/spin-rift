@@ -22,9 +22,11 @@ local Hud = require(script.Hud)
 local ArenaLook = require(script.ArenaLook)
 local City = require(script.City)
 local Garden = require(script.Garden)
+local Aquarium = require(script.Aquarium)
 local SeasonFolder = Shared:WaitForChild("Season")
 local Arenas = require(SeasonFolder:WaitForChild("Arenas"))
 local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
+local Shop = require(SeasonFolder:WaitForChild("Shop"))
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -41,6 +43,7 @@ local leaderboardRemote = Net.get(Net.REQUEST_LEADERBOARD)
 local feedbackRemote = Net.get(Net.SEND_FEEDBACK)
 local equipRemote = Net.get(Net.EQUIP)
 local premiumRemote = Net.get(Net.BUY_PREMIUM)
+local buyRemote = Net.get(Net.BUY_ITEM)
 local matchEvent = Net.get(Net.MATCH_EVENT)
 
 local ball = BallView.new()
@@ -66,6 +69,7 @@ local CAMERA_FOCUS = 1 -- how far past the net it aims
 local lastSwingSent = 0
 local selectedArena = Arenas.DEFAULT
 local bestRating = 1000
+local ownedItems: { [string]: boolean } = {} -- cosmetics and shop items (from the pass state)
 local MENU_CITY = Vector3.new(0, 6, 0) -- the city behind the menu, round the spawn
 local windActive = false
 
@@ -145,13 +149,26 @@ local function swing(screenAim: number?)
 	swingRemote:FireServer(t, math.clamp(aim, -1, 1), z)
 end
 
+local function setOwned(items: { string }?)
+	table.clear(ownedItems)
+	for _, id in items or {} do
+		ownedItems[id] = true
+	end
+end
+
 local function arenaButtonText(): string
 	local a = Arenas.get(selectedArena) or Arenas.List[1]
 	local text = S.t("menu.arena", { name = S.t("arena." .. a.id) })
-	if bestRating < a.unlockRating then
-		text ..= "  (" .. S.t("arena.locked", { rank = S.rank(a.unlockRank, a.unlockDivision) }) .. ")"
+	local rank = S.rank(a.unlockRank, a.unlockDivision)
+	local forSale = if a.sold then Shop.get(Arenas.itemId(a.id)) else nil
+	if not Arenas.unlocked(a.id, bestRating, ownedItems) then
+		text ..= "  (" .. (if forSale
+			then S.t("arena.lockedOrBuy", { rank = rank, price = forSale.price })
+			else S.t("arena.locked", { rank = rank })) .. ")"
 	elseif a.wind then
 		text ..= "\n" .. S.t("arena.windNote")
+	elseif a.drag then
+		text ..= "\n" .. S.t("arena.waterNote")
 	end
 	return text
 end
@@ -205,6 +222,9 @@ hud = Hud.new(player:WaitForChild("PlayerGui") :: PlayerGui, {
 	end,
 	onEquip = function(kind: string, id: string)
 		equipRemote:FireServer(kind, id)
+	end,
+	onBuy = function(itemId: string)
+		buyRemote:FireServer(itemId)
 	end,
 	onFeedback = function(category: string, text: string)
 		feedbackRemote:FireServer(category, text, S.locale())
@@ -404,6 +424,11 @@ local function onAbilityEvent(e: { [string]: any })
 			myGauge = e.gauge or myGauge
 			nextSlot = e.nextSlot or nextSlot
 			hud:setGauge(myGauge)
+		elseif e.id == "Drain" and e.target == me and e.targetGauge then
+			-- our gauge was stolen
+			myGauge = e.targetGauge
+			hud:setGauge(myGauge)
+			refreshSlots()
 		end
 		local o = origin
 		if e.state == "used" and o then
@@ -439,6 +464,7 @@ local function endMatchView()
 	hud:setWind(nil)
 	ArenaLook.apply(nil)
 	Garden.show(nil)
+	Aquarium.show(nil)
 	City.show(MENU_CITY)
 	ball:hide()
 	camera.CameraType = Enum.CameraType.Custom
@@ -476,13 +502,20 @@ local function onEvent(e: { [string]: any })
 		end
 		hud:setArenaButton(arenaButtonText())
 		if e.pass then
+			setOwned(e.pass.items)
 			hud:setPassState(e.pass)
 		end
 		if not e.tutorialDone and hud.menuNote.Text == "" then
 			hud:setMenuNote(S.t("menu.tryTutorial"), true)
 		end
 	elseif kind == "PassUpdate" then
+		setOwned(e.state.items)
 		hud:setPassState(e.state)
+		hud:setArenaButton(arenaButtonText())
+		if e.bought then
+			hud:setMenuNote(S.t("shop.bought", { item = Hud.shopItemName(e.bought) }), true)
+			hud:popupText(S.t("shop.bought", { item = Hud.shopItemName(e.bought) }), Palette.Grade.Good)
+		end
 		if e.gained and e.gained > 0 then
 			local text = S.t("pass.xpGain", { xp = e.gained })
 			if e.daily then
@@ -494,7 +527,7 @@ local function onEvent(e: { [string]: any })
 			hud:popupText(S.t("pass.levelUp", { n = e.levelAfter }), Palette.Grade.Perfect)
 		end
 		local newItems = e.newItems or {}
-		if #newItems > 0 then
+		if #newItems > 0 and not e.bought then
 			hud:setMenuNote(S.t("pass.newItem", { item = S.item(newItems[#newItems]) }), true)
 		end
 	elseif kind == "FeedbackResult" then
@@ -524,13 +557,11 @@ local function onEvent(e: { [string]: any })
 		hud:setControls(controlsText())
 		-- arena look, wind, and both players' cosmetics
 		ArenaLook.apply(e.arena)
-		if e.arena == "Sakura" then
-			City.show(nil)
-			Garden.show(e.origin, e.side)
-		else
-			Garden.show(nil)
-			City.show(e.origin, e.side)
-		end
+		-- each arena has its own scenery round it; the city is the default
+		local sakura, aquarium = e.arena == "Sakura", e.arena == "Aquarium"
+		Garden.show(if sakura then e.origin else nil, e.side)
+		Aquarium.show(if aquarium then e.origin else nil, e.side)
+		City.show(if sakura or aquarium then nil else e.origin, e.side)
 		windActive = e.wind == true
 		local looks = e.looks or {}
 		local function trailOf(look: any): Color3?

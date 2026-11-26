@@ -4,7 +4,7 @@ local Vector3 = roblox.Vector3
 return function(loader, expect)
 	local Season = loader.require("src/shared/Season")
 	local Rally = loader.require("src/shared/Rally")
-	local Arenas, Cosmetics, BattlePass = Season.Arenas, Season.Cosmetics, Season.BattlePass
+	local Arenas, Cosmetics, BattlePass, Shop = Season.Arenas, Season.Cosmetics, Season.BattlePass, Season.Shop
 	local Config, Trajectory, Match = Rally.Config, Rally.Trajectory, Rally.Match
 
 	return {
@@ -78,7 +78,59 @@ return function(loader, expect)
 				expect(Rating.tier(sakura.unlockRating).label).toBe("ブロンズ I")
 				expect(Rating.tier(sakura.unlockRating - 1).label).toBe("ブロンズ II")
 				expect(table.concat(Arenas.shared(1200, 1000), ",")).toBe("Rooftop")
-				expect(table.concat(Arenas.shared(1200, 1300), ",")).toBe("Rooftop,Sakura")
+				expect(table.concat(Arenas.shared(1200, 1000), ",")).toBe("Rooftop")
+				expect(table.concat(Arenas.shared(1060, 1090), ",")).toBe("Rooftop,Sakura")
+				expect(table.concat(Arenas.shared(1200, 1300), ",")).toBe("Rooftop,Sakura,Aquarium")
+			end,
+		},
+		{
+			"Aquarium Dome unlocks at Silver or by buying it, and its water slows every shot outside ranked",
+			function()
+				local Rating = loader.require("src/shared/Rank").Rating
+				local aq = Arenas.get("Aquarium") :: any
+				expect(Rating.tier(aq.unlockRating).label).toBe("シルバー III")
+				expect(Arenas.unlocked("Aquarium", 1099)).toBe(false)
+				expect(Arenas.unlocked("Aquarium", 1100)).toBe(true)
+				expect(Arenas.unlocked("Aquarium", 1000, { arena_Aquarium = true })).toBe(true)
+				expect(Arenas.unlocked("Sakura", 1000, { arena_Sakura = true })).toBe(false) -- not sold
+				-- a buyer and a Silver player can be sent there together
+				local both = Arenas.shared(1000, 1200, { arena_Aquarium = true }, nil)
+				expect(table.find(both, "Aquarium") ~= nil).toBeTruthy()
+				local from = Vector3.new(-Config.HitX, Config.HitY, 0)
+				local dry = Trajectory.plan(from, -1, 0, "Good", 0)
+				local wet = Trajectory.plan(from, -1, 0, "Good", 0, nil, nil, nil, aq.drag)
+				expect(wet.duration).toBeNear(dry.duration * aq.drag, 1e-9)
+				local m = Match.new(0, 1, nil, { drag = aq.drag })
+				expect(m:serve(m.nextServeAt, 0, 0)[1].shot.duration > Match.new(0, 1):serve(5, 0, 0)[1].shot.duration).toBeTruthy()
+			end,
+		},
+		{
+			"every shop item is a real item with a price, and paid abilities and arenas match the shop",
+			function()
+				local Abilities = Rally.Abilities
+				local seen = {}
+				for _, item in Shop.Items do
+					expect(seen[item.id]).toBe(nil)
+					seen[item.id] = true
+					expect(item.price > 0).toBeTruthy()
+					expect(Shop.get(item.id)).toBe(item)
+					if item.kind == "paddle" or item.kind == "trail" then
+						expect(Cosmetics.get(item.id).kind).toBe(item.kind)
+					elseif item.kind == "ability" then
+						expect(Abilities.get(string.sub(item.id, 9)).paid).toBe(true)
+					else
+						expect(Arenas.get(string.sub(item.id, 7)).sold).toBe(true)
+					end
+				end
+				for _, d in Abilities.List do
+					expect(d.paid == true).toBe(Shop.get(Abilities.itemId(d.id)) ~= nil)
+				end
+				-- shop cosmetics are not also Battle Pass rewards
+				for _, list in { BattlePass.Free, BattlePass.Premium } do
+					for _, id in list do
+						expect(Shop.get(id)).toBe(nil)
+					end
+				end
 			end,
 		},
 		{

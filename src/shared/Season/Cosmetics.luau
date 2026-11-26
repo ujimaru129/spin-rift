@@ -23,6 +23,10 @@ local LIST: { Item } = {
 	{ id = "paddle_lava", kind = "paddle", rgb = { 255, 100, 30 }, material = "Neon" },
 	{ id = "paddle_void", kind = "paddle", rgb = { 110, 60, 200 }, material = "ForceField" },
 	{ id = "paddle_prism", kind = "paddle", rgb = { 240, 245, 255 }, material = "ForceField" },
+	-- sold in the shop (see Shop)
+	{ id = "paddle_coral", kind = "paddle", rgb = { 255, 110, 110 }, material = "Neon" },
+	{ id = "paddle_aqua", kind = "paddle", rgb = { 90, 220, 255 }, material = "Glass" },
+	{ id = "paddle_obsidian", kind = "paddle", rgb = { 70, 30, 110 }, material = "ForceField" },
 	-- ball trails (used for your normal shots; ability shots keep their ability colour)
 	{ id = "trail_fire", kind = "trail", rgb = { 255, 110, 40 } },
 	{ id = "trail_ice", kind = "trail", rgb = { 150, 230, 255 } },
@@ -30,6 +34,10 @@ local LIST: { Item } = {
 	{ id = "trail_gold", kind = "trail", rgb = { 255, 215, 90 } },
 	{ id = "trail_toxic", kind = "trail", rgb = { 140, 255, 60 } },
 	{ id = "trail_galaxy", kind = "trail", rgb = { 150, 100, 255 } },
+	-- sold in the shop
+	{ id = "trail_mint", kind = "trail", rgb = { 120, 255, 200 } },
+	{ id = "trail_sunset", kind = "trail", rgb = { 255, 140, 100 } },
+	{ id = "trail_crimson", kind = "trail", rgb = { 255, 40, 80 } },
 	-- titles
 	{ id = "title_rookie", kind = "title" },
 	{ id = "title_rallyer", kind = "title" },

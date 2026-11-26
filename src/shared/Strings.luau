@@ -825,6 +825,30 @@ local T: { [string]: Entry } = {
 		ko = "사쿠라 플로트",
 		id = "Sakura Melayang",
 	},
+	["arena.Aquarium"] = {
+		ja = "アクアリウム・ドーム",
+		en = "Aquarium Dome",
+		es = "Cúpula Acuario",
+		pt = "Domo Aquário",
+		ko = "아쿠아리움 돔",
+		id = "Kubah Akuarium",
+	},
+	["arena.lockedOrBuy"] = {
+		ja = "{rank}で解放／ショップで{price} Robux",
+		en = "Unlocks at {rank} / {price} Robux in the Shop",
+		es = "Se desbloquea en {rank} / {price} Robux en la Tienda",
+		pt = "Desbloqueia em {rank} / {price} Robux na Loja",
+		ko = "{rank} 달성 시 해금 / 상점에서 {price} Robux",
+		id = "Terbuka di {rank} / {price} Robux di Toko",
+	},
+	["arena.waterNote"] = {
+		ja = "水の中なのでボールが少しゆっくり飛ぶ（ランク戦ではふつう）",
+		en = "Underwater: the ball flies a little slower (normal in Ranked)",
+		es = "Bajo el agua: la pelota vuela un poco más lento (normal en Clasificatoria)",
+		pt = "Debaixo d'água: a bola voa um pouco mais devagar (normal na Ranqueada)",
+		ko = "물속이라 공이 조금 느리게 날아간다 (랭크전에서는 보통)",
+		id = "Di bawah air: bola terbang sedikit lebih lambat (normal di mode Ranked)",
+	},
 	["arena.locked"] = {
 		ja = "{rank}で解放",
 		en = "Unlocks at {rank}",
@@ -969,6 +993,82 @@ local T: { [string]: Entry } = {
 		pt = "Bloqueado",
 		ko = "미획득",
 		id = "Terkunci",
+	},
+
+	-- shop
+	["menu.shop"] = { ja = "ショップ", en = "Shop", es = "Tienda", pt = "Loja", ko = "상점", id = "Toko" },
+	["shop.title"] = { ja = "ショップ", en = "Shop", es = "Tienda", pt = "Loja", ko = "상점", id = "Toko" },
+	["shop.note"] = {
+		ja = "一度買えばずっと使える。必殺技は無料の技と同じ強さに調整してある",
+		en = "Buy once, keep forever. Shop moves are tuned to be as strong as the free ones",
+		es = "Compra una vez y es tuyo para siempre. Los movimientos de la tienda son tan fuertes como los gratis",
+		pt = "Compre uma vez e é seu para sempre. Os golpes da loja são tão fortes quanto os grátis",
+		ko = "한 번 사면 계속 사용 가능. 상점 필살기는 무료 필살기와 같은 강도로 조정됨",
+		id = "Beli sekali, milikmu selamanya. Jurus toko sama kuatnya dengan yang gratis",
+	},
+	["shop.kind.paddle"] = {
+		ja = "ラケット",
+		en = "Paddle",
+		es = "Raqueta",
+		pt = "Raquete",
+		ko = "라켓",
+		id = "Raket",
+	},
+	["shop.kind.trail"] = {
+		ja = "ボールの軌跡",
+		en = "Ball trail",
+		es = "Estela",
+		pt = "Rastro",
+		ko = "공 궤적",
+		id = "Jejak bola",
+	},
+	["shop.kind.ability"] = {
+		ja = "必殺技",
+		en = "Special move",
+		es = "Movimiento especial",
+		pt = "Golpe especial",
+		ko = "필살기",
+		id = "Jurus spesial",
+	},
+	["shop.kind.arena"] = {
+		ja = "ステージ",
+		en = "Arena",
+		es = "Arena",
+		pt = "Arena",
+		ko = "스테이지",
+		id = "Arena",
+	},
+	["shop.price"] = {
+		ja = "{price} Robux",
+		en = "{price} Robux",
+		es = "{price} Robux",
+		pt = "{price} Robux",
+		ko = "{price} Robux",
+		id = "{price} Robux",
+	},
+	["shop.owned"] = {
+		ja = "購入済み",
+		en = "Owned",
+		es = "Comprado",
+		pt = "Comprado",
+		ko = "구매 완료",
+		id = "Dimiliki",
+	},
+	["shop.bought"] = {
+		ja = "{item} を手に入れた！",
+		en = "You got {item}!",
+		es = "¡Conseguiste {item}!",
+		pt = "Você ganhou {item}!",
+		ko = "{item} 획득!",
+		id = "Kamu dapat {item}!",
+	},
+	["shop.abilityLocked"] = {
+		ja = "{name}（ショップ {price} Robux）",
+		en = "{name} (Shop {price} Robux)",
+		es = "{name} (Tienda {price} Robux)",
+		pt = "{name} (Loja {price} Robux)",
+		ko = "{name} (상점 {price} Robux)",
+		id = "{name} (Toko {price} Robux)",
 	},
 }
 
@@ -1288,8 +1388,90 @@ local ABILITY: { [string]: { [string]: AbilityText } } = {
 			effect = "Layar lawan penuh gangguan selama 2,5 dtk dan bola berkedip",
 		},
 	},
+	Feint = {
+		en = {
+			name = "Feint Shot",
+			role = "Trick",
+			effect = "Your next return heads the wrong way, then cuts back to its real side the moment it bounces",
+		},
+		es = {
+			name = "Tiro finta",
+			role = "Engaño",
+			effect = "Tu próxima devolución va hacia el lado equivocado y gira al lado real justo al botar",
+		},
+		pt = {
+			name = "Finta",
+			role = "Engano",
+			effect = "Sua próxima rebatida vai para o lado errado e corta para o lado certo ao quicar",
+		},
+		ko = {
+			name = "페인트 샷",
+			role = "교란",
+			effect = "다음 리턴이 반대쪽으로 날아가다가 바운드하는 순간 진짜 방향으로 꺾인다",
+		},
+		id = {
+			name = "Pukulan Tipuan",
+			role = "Kecoh",
+			effect = "Pukulan berikutnya menuju arah yang salah, lalu berbelok ke arah aslinya saat memantul",
+		},
+	},
+	SpinKick = {
+		en = {
+			name = "Spin Kick",
+			role = "Attack",
+			effect = "Your next return floats in, bounces late and kicks forward fast; the timing window shrinks to 93%",
+		},
+		es = {
+			name = "Patada giratoria",
+			role = "Ataque",
+			effect = "Tu próxima devolución llega lenta, bota tarde y sale disparada; la ventana de tiempo baja al 93%",
+		},
+		pt = {
+			name = "Chute giratório",
+			role = "Ataque",
+			effect = "Sua próxima rebatida vem lenta, quica tarde e dispara; a janela de tempo cai para 93%",
+		},
+		ko = {
+			name = "스핀 킥",
+			role = "공격",
+			effect = "다음 리턴이 천천히 날아와 늦게 바운드한 뒤 급가속한다. 타이밍 폭이 93%가 된다",
+		},
+		id = {
+			name = "Tendangan Putar",
+			role = "Serang",
+			effect = "Pukulan berikutnya melayang pelan, memantul telat, lalu melesat cepat; jendela waktu jadi 93%",
+		},
+	},
+	Drain = {
+		en = {
+			name = "Rift Drain",
+			role = "Hinder",
+			effect = "Steals up to 5 of your opponent's gauge for you (fires by itself once they have 3 or more)",
+		},
+		es = {
+			name = "Drenaje Rift",
+			role = "Control",
+			effect = "Roba hasta 5 de la barra de tu rival para ti (se activa solo cuando tiene 3 o más)",
+		},
+		pt = {
+			name = "Dreno Rift",
+			role = "Controle",
+			effect = "Rouba até 5 da barra do oponente para você (ativa sozinho quando ele tem 3 ou mais)",
+		},
+		ko = {
+			name = "리프트 드레인",
+			role = "방해",
+			effect = "상대 게이지를 최대 5칸 빼앗아 내 것으로 만든다 (상대 게이지가 3칸 이상이면 자동 발동)",
+		},
+		id = {
+			name = "Serap Rift",
+			role = "Hambat",
+			effect = "Mencuri hingga 5 gauge lawan untukmu (aktif sendiri saat lawan punya 3 atau lebih)",
+		},
+	},
 }
 
+-- (shop abilities, below EMP)
 -- Cosmetic item names (titles are shown as-is next to the player's name).
 local ITEM: { [string]: Entry } = {
 	paddle_cyan = { ja = "シアン", en = "Cyan", es = "Cian", pt = "Ciano", ko = "시안", id = "Sian" },
@@ -1315,6 +1497,33 @@ local ITEM: { [string]: Entry } = {
 	paddle_lava = { ja = "マグマ", en = "Magma", es = "Magma", pt = "Magma", ko = "마그마", id = "Magma" },
 	paddle_void = { ja = "ヴォイド", en = "Void", es = "Vacío", pt = "Vazio", ko = "보이드", id = "Hampa" },
 	paddle_prism = { ja = "プリズム", en = "Prism", es = "Prisma", pt = "Prisma", ko = "프리즘", id = "Prisma" },
+	paddle_coral = { ja = "コーラル", en = "Coral", es = "Coral", pt = "Coral", ko = "코랄", id = "Koral" },
+	paddle_aqua = { ja = "アクア", en = "Aqua", es = "Aqua", pt = "Água", ko = "아쿠아", id = "Aqua" },
+	paddle_obsidian = {
+		ja = "オブシディアン",
+		en = "Obsidian",
+		es = "Obsidiana",
+		pt = "Obsidiana",
+		ko = "옵시디언",
+		id = "Obsidian",
+	},
+	trail_mint = { ja = "ミント", en = "Mint", es = "Menta", pt = "Menta", ko = "민트", id = "Mint" },
+	trail_sunset = {
+		ja = "夕焼け",
+		en = "Sunset",
+		es = "Atardecer",
+		pt = "Pôr do sol",
+		ko = "노을",
+		id = "Senja",
+	},
+	trail_crimson = {
+		ja = "クリムゾン",
+		en = "Crimson",
+		es = "Carmesí",
+		pt = "Carmesim",
+		ko = "크림슨",
+		id = "Merah tua",
+	},
 	trail_fire = { ja = "ほのお", en = "Fire", es = "Fuego", pt = "Fogo", ko = "불꽃", id = "Api" },
 	trail_ice = { ja = "こおり", en = "Frost", es = "Escarcha", pt = "Geada", ko = "얼음", id = "Embun beku" },
 	trail_sakura = { ja = "花びら", en = "Petals", es = "Pétalos", pt = "Pétalas", ko = "꽃잎", id = "Kelopak" },

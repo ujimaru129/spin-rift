@@ -33,6 +33,13 @@ AudioIds.Sfx = {
 	"Lose",
 }
 
+-- Shop moves borrow a sound from the sheet until their own are made and uploaded.
+AudioIds.Alias = {
+	Feint = "Zigzag",
+	SpinKick = "Meteor",
+	Drain = "GravityWell",
+} :: { [string]: string }
+
 -- A second sheet for the ball itself: one sound every HIT_SLOT seconds.
 AudioIds.HitSheet = "rbxassetid://124496883304992"
 AudioIds.HIT_SLOT = 0.5
@@ -49,7 +56,7 @@ end
 
 -- Where a sound sits in the sheet, in seconds (nil when there is none by that name).
 function AudioIds.region(name: string): (number?, number?)
-	local i = table.find(AudioIds.Sfx, name)
+	local i = table.find(AudioIds.Sfx, AudioIds.Alias[name] or name)
 	if not i then
 		return nil, nil
 	end

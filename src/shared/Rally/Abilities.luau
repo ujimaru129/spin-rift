@@ -1,6 +1,8 @@
 --!strict
--- The twelve abilities (eight from the spec, four added after launch). Players bring two into a
--- match and spend Rift gauge to use them.
+-- The fifteen abilities (eight from the spec, four added after launch, three sold in the shop).
+-- Players bring two into a match and spend Rift gauge to use them. Shop abilities (`paid`) can only
+-- be brought by players who bought them (see Abilities.sanitize); they are tuned to the same
+-- 45-55% win rate as the free ones, so buying one gives a new style, not a stronger player.
 --
 -- Abilities fire by themselves once the gauge covers them, the two taking turns.
 -- "shot" abilities change the player's next return.
@@ -15,6 +17,7 @@ export type Def = {
 	rgb: { number },
 	effect: string,
 	counter: string,
+	paid: boolean?, -- sold in the shop (item id "ability_" .. id)
 }
 
 local Abilities = {}
@@ -29,9 +32,13 @@ Abilities.Tuning = {
 	GravityWell = { factor = 0.5, length = 4 },
 	Blink = { distance = 6 },
 	Zigzag = { amount = 1.45, waves = 3 }, -- sideways swing (studs) and number of half-waves
-	QuantumStop = { length = 0.2, factor = 0.05 }, -- stops over the net for `length` seconds
+	QuantumStop = { length = 0.18, factor = 0.05 }, -- stops over the net for `length` seconds
 	Meteor = { arc = 2.4, window = 0.9 }, -- a much higher first arc; harder to time
 	EMP = { length = 2.5, timingSd = 1.35 }, -- the opponent's screen is jammed (bots time worse)
+	-- shop abilities
+	Feint = { amount = 3.4 }, -- heads this far (studs) the wrong way, then cuts back after the bounce
+	SpinKick = { bounceAt = 0.74, window = 0.93 }, -- bounces late and kicks forward fast; windows x0.93
+	Drain = { amount = 5, minimum = 3 }, -- steals up to this much gauge, once the opponent has `minimum`
 }
 
 -- When instant abilities fire by themselves (see Match.autoUse).
@@ -151,7 +158,7 @@ local LIST: { Def } = {
 		kind = "shot",
 		cost = 4,
 		rgb = { 255, 70, 50 },
-		effect = "次の返球が高く上がって急な角度で落ちる。打てる時間の幅が90%になる",
+		effect = "次の返球が高く上がって急な角度で落ちる。打てる時間の幅が93%になる",
 		counter = "落ちてくる場所に早めに入る",
 	},
 	{
@@ -163,6 +170,40 @@ local LIST: { Def } = {
 		rgb = { 200, 255, 60 },
 		effect = "相手の画面に2.5秒間ノイズが走り、ボールがちらつく",
 		counter = "台に落ちる影を見る",
+	},
+	-- sold in the shop
+	{
+		id = "Feint",
+		name = "フェイントショット",
+		role = "かく乱",
+		kind = "shot",
+		cost = 3,
+		rgb = { 255, 120, 170 },
+		effect = "次の返球が逆の方向へ飛んでいき、弾んだ瞬間に本当の方向へ切り返す",
+		counter = "弾むまで動きすぎない",
+		paid = true,
+	},
+	{
+		id = "SpinKick",
+		name = "スピンキック",
+		role = "攻撃",
+		kind = "shot",
+		cost = 4,
+		rgb = { 90, 255, 230 },
+		effect = "次の返球がゆっくり飛んで遅く弾み、弾んだ後に急加速する。打てる時間の幅が93%になる",
+		counter = "弾む音で打つタイミングを合わせる",
+		paid = true,
+	},
+	{
+		id = "Drain",
+		name = "リフトドレイン",
+		role = "妨害",
+		kind = "instant",
+		cost = 2,
+		rgb = { 255, 60, 120 },
+		effect = "相手のゲージを最大5つ奪って自分のものにする（相手のゲージが3つ以上たまったとき自動で発動）",
+		counter = "ゲージをためすぎずに使う",
+		paid = true,
 	},
 }
 
@@ -179,14 +220,34 @@ function Abilities.get(id: string): Def?
 	return BY_ID[id]
 end
 
--- A valid loadout is up to SLOTS distinct known ability ids. Anything else falls back to the default.
-function Abilities.sanitize(loadout: unknown): { string }
+-- The shop item that unlocks a paid ability.
+function Abilities.itemId(id: string): string
+	return "ability_" .. id
+end
+
+-- Can a player with these items bring this ability?
+function Abilities.usable(id: string, owned: { [string]: boolean }?): boolean
+	local def = BY_ID[id]
+	if not def then
+		return false
+	end
+	return not def.paid or (owned ~= nil and owned[Abilities.itemId(id)] == true)
+end
+
+-- A valid loadout is up to SLOTS distinct known ability ids the player may use (shop abilities
+-- only if `owned` has them). Anything else falls back to the default.
+function Abilities.sanitize(loadout: unknown, owned: { [string]: boolean }?): { string }
 	if type(loadout) ~= "table" then
 		return table.clone(Abilities.DefaultLoadout)
 	end
 	local out: { string } = {}
 	for _, id in loadout :: { any } do
-		if type(id) == "string" and BY_ID[id] and not table.find(out, id) and #out < Abilities.SLOTS then
+		if
+			type(id) == "string"
+			and Abilities.usable(id, owned)
+			and not table.find(out, id)
+			and #out < Abilities.SLOTS
+		then
 			table.insert(out, id)
 		end
 	end

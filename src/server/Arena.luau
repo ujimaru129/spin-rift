@@ -206,6 +206,8 @@ local function buildZone(model: Model, o: Vector3)
 end
 
 local SAKURA_GLOW = Color3.fromRGB(255, 111, 174)
+local AQUARIUM_GLOW = Color3.fromRGB(90, 150, 255)
+local NAMES = { Sakura = "SakuraFloat", Aquarium = "AquariumDome" }
 
 -- Recolours the neon parts shared by every arena (rims, rings, bands) for a theme.
 local function tint(model: Model, from: Color3, to: Color3)
@@ -216,15 +218,17 @@ local function tint(model: Model, from: Color3, to: Color3)
 	end
 end
 
--- arenaId: "Rooftop" (default) or "Sakura".
+-- arenaId: "Rooftop" (default), "Sakura" or "Aquarium".
 function Arena.build(origin: Vector3, _seed: number, arenaId: string?): Model
 	local model = Instance.new("Model")
-	model.Name = if arenaId == "Sakura" then "SakuraFloat" else "NeonRooftop"
+	model.Name = NAMES[arenaId or ""] or "NeonRooftop"
 	buildPlatform(model, origin)
 	buildTable(model, origin)
 	if arenaId == "Sakura" then
 		tint(model, Palette.TeamA, SAKURA_GLOW)
-	end -- the scenery round each arena is drawn on each client (City, Garden)
+	elseif arenaId == "Aquarium" then
+		tint(model, Palette.TeamA, AQUARIUM_GLOW)
+	end -- the scenery round each arena is drawn on each client (City, Garden, Aquarium)
 	buildZone(model, origin)
 	model.Parent = workspace
 	return model

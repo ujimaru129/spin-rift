@@ -17,6 +17,7 @@ local S = require(Shared:WaitForChild("Strings"))
 local SeasonFolder = Shared:WaitForChild("Season")
 local BattlePass = require(SeasonFolder:WaitForChild("BattlePass"))
 local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
+local Shop = require(SeasonFolder:WaitForChild("Shop"))
 
 local FONT = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
 local FONT_REGULAR = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
@@ -40,6 +41,7 @@ export type Callbacks = {
 	onArena: () -> (),
 	onBuyPremium: () -> (),
 	onEquip: (kind: string, id: string) -> (),
+	onBuy: (itemId: string) -> (), -- a shop item (see Season/Shop)
 }
 
 export type Slot = { frame: Frame, name: TextLabel, cost: TextLabel, key: TextLabel, stroke: UIStroke }
@@ -176,6 +178,9 @@ export type Hud = typeof(setmetatable(
 		passRows: ScrollingFrame,
 		customize: Frame,
 		cosGrids: { [string]: Frame },
+		shop: Frame,
+		shopRows: ScrollingFrame,
+		owned: { [string]: boolean },
 		passState: { [string]: any }?,
 		titles: { string },
 	},
@@ -546,6 +551,34 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	bind(
 		button(customize, "", Palette.TeamB, function()
 			customize.Visible = false
+		end),
+		"common.close"
+	).Size =
+		UDim2.new(1, 0, 0, 36)
+
+	-- shop
+	local shop = panel(gui, "Shop")
+	centered(shop, 360)
+	shop.Visible = false
+	vlist(shop, 6)
+	bind(label(shop, "", 20, Palette.Grade.Good), "shop.title")
+	bind(label(shop, "", 12, INK_DIM, FONT_REGULAR), "shop.note").Size = UDim2.new(1, 0, 0, 32)
+	local shopRows = Instance.new("ScrollingFrame")
+	shopRows.BackgroundTransparency = 1
+	shopRows.BorderSizePixel = 0
+	shopRows.Size = UDim2.new(1, 0, 0, 260)
+	shopRows.CanvasSize = UDim2.new()
+	shopRows.ScrollBarThickness = 4
+	shopRows.Parent = shop
+	ordered(shopRows)
+	local srl = Instance.new("UIListLayout")
+	srl.SortOrder = Enum.SortOrder.LayoutOrder
+	srl.Padding = UDim.new(0, 6)
+	srl.Parent = shopRows
+	fitCanvas(shopRows, srl, 0)
+	bind(
+		button(shop, "", Palette.TeamB, function()
+			shop.Visible = false
 		end),
 		"common.close"
 	).Size =
@@ -1022,6 +1055,9 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 		passRows = passRows,
 		customize = customize,
 		cosGrids = cosGrids,
+		shop = shop,
+		shopRows = shopRows,
+		owned = {} :: { [string]: boolean },
 		passState = nil :: { [string]: any }?,
 		titles = { "", "" },
 	}, Hud)
@@ -1058,10 +1094,16 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 					self:showCustomize()
 				end,
 			},
+			{
+				"menu.shop",
+				function()
+					self:showShop()
+				end,
+			},
 		}
 	do
 		local b = bind(button(seasonRow, "", Palette.Grade.Perfect, entry[2]), entry[1])
-		b.Size = UDim2.new(0.5, -3, 1, 0)
+		b.Size = UDim2.new(1 / 3, -4, 1, 0)
 		b.TextSize = 14
 	end
 
@@ -1116,7 +1158,8 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	boardTabs[2].Activated:Connect(function()
 		callbacks.onLeaderboard(self.boardRegion)
 	end);
-	(self :: any).onEquip = callbacks.onEquip
+	(self :: any).onEquip = callbacks.onEquip;
+	(self :: any).onBuy = callbacks.onBuy
 	self:relabel()
 	return self
 end
@@ -1126,10 +1169,7 @@ function Hud.relabel(self: Hud)
 	for _, b in self.bound do
 		b.inst[b.prop] = S.t(b.key)
 	end
-	for id, chip in self.pickChips do
-		local def = Abilities.get(id)
-		chip.Text = `{S.abilityName(id)}  {if def then def.cost else ""}`
-	end
+	self:labelChips()
 	self:refreshPicks(self.pickFocus or self.loadout[1])
 	self:setSlots(self.slotIds)
 	self:refreshFeedback()
@@ -1196,6 +1236,19 @@ function Hud.setPassState(self: Hud, state: { [string]: any })
 	for _, id in state.items do
 		owned[id] = true
 	end
+	self.owned = owned
+	-- a shop ability no longer owned (or not yet loaded) cannot stay in the loadout
+	for i = #self.loadout, 1, -1 do
+		if not Abilities.usable(self.loadout[i], owned) then
+			table.remove(self.loadout, i)
+		end
+	end
+	if #self.loadout == 0 then
+		self.loadout = table.clone(Abilities.DefaultLoadout)
+	end
+	self:labelChips()
+	self:refreshPicks(self.pickFocus)
+	self:drawShop()
 	-- pass rows
 	for _, c in self.passRows:GetChildren() do
 		if c:IsA("TextLabel") then
@@ -1247,18 +1300,22 @@ function Hud.setPassState(self: Hud, state: { [string]: any })
 		for i, id in choices do
 			local has = id == "" or owned[id] == true
 			local on = (state.equipped :: any)[kind] == id
+			local forSale = if has then nil else Shop.get(id)
 			local text = if id == ""
 				then S.t("cos.none")
 				elseif has then S.item(id)
+				elseif forSale then S.item(id) .. " (" .. S.t("shop.price", { price = forSale.price }) .. ")"
 				else S.item(id) .. " (" .. S.t("cos.locked") .. ")"
 			local b = button(g, text, if id == "" then INK_DIM else itemColor(id), function()
 				if has then
 					self:equipLocal(kind, id)
+				elseif forSale then
+					self:buy(id)
 				end
 			end)
 			b.LayoutOrder = i
 			b.TextSize = 13
-			b.TextTransparency = if has then 0 else 0.55
+			b.TextTransparency = if has then 0 elseif forSale then 0.25 else 0.55
 			b.BackgroundColor3 = if on then itemColor(id):Lerp(PANEL, 0.55) else FIELD
 			b:SetAttribute("ItemId", id)
 		end
@@ -1277,6 +1334,7 @@ function Hud.showPass(self: Hud)
 	self.leaderboard.Visible = false
 	self.feedback.Visible = false
 	self.customize.Visible = false
+	self.shop.Visible = false
 	self.pass.Visible = true
 end
 
@@ -1284,7 +1342,75 @@ function Hud.showCustomize(self: Hud)
 	self.leaderboard.Visible = false
 	self.feedback.Visible = false
 	self.pass.Visible = false
+	self.shop.Visible = false
 	self.customize.Visible = true
+end
+
+function Hud.showShop(self: Hud)
+	self.leaderboard.Visible = false
+	self.feedback.Visible = false
+	self.pass.Visible = false
+	self.customize.Visible = false
+	self.shop.Visible = true
+end
+
+-- Set by the client script: asks the server to buy a shop item.
+function Hud.buy(self: Hud, itemId: string)
+	local cb = (self :: any).onBuy
+	if cb and Shop.get(itemId) and not self.owned[itemId] then
+		cb(itemId)
+	end
+end
+
+-- The name of a shop item in the current language.
+function Hud.shopItemName(id: string): string
+	local item = Shop.get(id)
+	if item and item.kind == "ability" then
+		return S.abilityName(string.sub(id, #"ability_" + 1))
+	elseif item and item.kind == "arena" then
+		return S.t("arena." .. string.sub(id, #"arena_" + 1))
+	end
+	return S.item(id)
+end
+
+-- Ability chips: name and cost; a shop move not bought yet shows its price.
+function Hud.labelChips(self: Hud)
+	for id, chip in self.pickChips do
+		local def = Abilities.get(id)
+		local item = Shop.get(Abilities.itemId(id))
+		if def and item and not Abilities.usable(id, self.owned) then
+			chip.Text = S.t("shop.abilityLocked", { name = S.abilityName(id), price = item.price })
+		else
+			chip.Text = `{S.abilityName(id)}  {if def then def.cost else ""}`
+		end
+	end
+end
+
+-- One row per shop item: kind, name, and a price button (or "owned").
+function Hud.drawShop(self: Hud)
+	for _, c in self.shopRows:GetChildren() do
+		if c:IsA("TextButton") then
+			c:Destroy()
+		end
+	end
+	for i, item in Shop.Items do
+		local has = self.owned[item.id] == true
+		local color = if item.kind == "ability"
+			then abilityColor(string.sub(item.id, #"ability_" + 1))
+			elseif item.kind == "arena" then Palette.TeamA
+			else itemColor(item.id)
+		local text = `{S.t("shop.kind." .. item.kind)}: {Hud.shopItemName(item.id)}   `
+			.. (if has then S.t("shop.owned") else S.t("shop.price", { price = item.price }))
+		local b = button(self.shopRows, text, color, function()
+			self:buy(item.id)
+		end)
+		b.LayoutOrder = i
+		b.Size = UDim2.new(1, -6, 0, 40)
+		b.TextSize = 14
+		b.TextTransparency = if has then 0.45 else 0
+		b.AutoButtonColor = not has
+		b:SetAttribute("ItemId", item.id)
+	end
 end
 
 function Hud.setProfile(self: Hud, p: { [string]: any })
@@ -1389,6 +1515,12 @@ end
 
 -- Picking a third ability drops the oldest pick.
 function Hud.togglePick(self: Hud, id: string)
+	if not Abilities.usable(id, self.owned) then
+		-- a shop move not bought yet: show what it does and offer it
+		self:refreshPicks(id)
+		self:buy(Abilities.itemId(id))
+		return
+	end
 	local i = table.find(self.loadout, id)
 	if i then
 		if #self.loadout > 1 then
@@ -1542,6 +1674,7 @@ end
 function Hud.showMatch(self: Hud, opponentName: string)
 	self.pass.Visible = false
 	self.customize.Visible = false
+	self.shop.Visible = false
 	self.rankLine.Visible = false
 	self.leaderboard.Visible = false
 	self.feedback.Visible = false

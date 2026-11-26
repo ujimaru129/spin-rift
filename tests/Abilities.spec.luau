@@ -30,9 +30,9 @@ return function(loader, expect)
 
 	return {
 		{
-			"there are 12 abilities with the costs from the spec (and the four added after launch)",
+			"there are 15 abilities with the costs from the spec (four added after launch, three in the shop)",
 			function()
-				expect(#Abilities.List).toBe(12)
+				expect(#Abilities.List).toBe(15)
 				local costs = {}
 				for _, d in Abilities.List do
 					costs[d.id] = d.cost
@@ -49,6 +49,84 @@ return function(loader, expect)
 				expect(costs.QuantumStop).toBe(4)
 				expect(costs.Meteor).toBe(4)
 				expect(costs.EMP).toBe(3)
+				expect(costs.Feint).toBe(3)
+				expect(costs.SpinKick).toBe(4)
+				expect(costs.Drain).toBe(2)
+				local paid = {}
+				for _, d in Abilities.List do
+					if d.paid then
+						table.insert(paid, d.id)
+					end
+				end
+				expect(table.concat(paid, ",")).toBe("Feint,SpinKick,Drain")
+			end,
+		},
+		{
+			"shop abilities can only be brought by players who bought them",
+			function()
+				expect(table.concat(Abilities.sanitize({ "Feint", "Smash" }), ",")).toBe("Smash")
+				expect(table.concat(Abilities.sanitize({ "Drain" }), ",")).toBe("Curve,Barrier")
+				local owned = { ability_Feint = true }
+				expect(table.concat(Abilities.sanitize({ "Feint", "Drain", "Smash" }, owned), ",")).toBe("Feint,Smash")
+				expect(Abilities.usable("Smash", nil)).toBe(true)
+				expect(Abilities.usable("SpinKick", owned)).toBe(false)
+			end,
+		},
+		{
+			"a Feint heads the wrong way, cuts back after the bounce, stays on the table and ends where aimed",
+			function()
+				for _, aim in { -5, -2, 0, 2, 5 } do
+					local from = Vector3.new(-Config.HitX, Config.HitY, -aim / 2)
+					local plain = Trajectory.plan(from, -1, aim, "Good", 0)
+					local feint = Trajectory.plan(from, -1, aim, "Good", 0, "Feint")
+					local f = feint.effects.feint
+					expect(f ~= nil).toBeTruthy()
+					if aim ~= 0 then
+						-- it leans away from where it is really going
+						expect(f * aim < 0).toBeTruthy()
+					end
+					local b = Trajectory.bouncePoint(feint)
+					expect(math.abs(b.Z) <= Config.Table.halfWidth).toBeTruthy()
+					expect(math.abs(b.Z - Trajectory.bouncePoint(plain).Z)).toBeNear(math.abs(f), 1e-6)
+					expect(Trajectory.positionAt(feint, Trajectory.arrivalTime(feint)).Z).toBeNear(feint.to.Z, 1e-6)
+					expect(Trajectory.arrivalTime(feint)).toBeNear(Trajectory.arrivalTime(plain), 1e-6)
+				end
+			end,
+		},
+		{
+			"a Spin Kick bounces late and comes fast after the bounce, with narrower timing windows",
+			function()
+				local from = Vector3.new(-Config.HitX, Config.HitY, 0)
+				local plain = Trajectory.plan(from, -1, 1, "Good", 0)
+				local kick = Trajectory.plan(from, -1, 1, "Good", 0, "SpinKick")
+				expect(kick.bounceFraction).toBe(Abilities.Tuning.SpinKick.bounceAt)
+				expect(Trajectory.bounceTime(kick) > Trajectory.bounceTime(plain)).toBeTruthy()
+				expect(Trajectory.arrivalTime(kick)).toBeNear(Trajectory.arrivalTime(plain), 1e-6)
+				expect(Trajectory.windowScale(kick)).toBe(Abilities.Tuning.SpinKick.window)
+				expect(math.abs(Trajectory.bouncePoint(kick).Z) <= Config.Table.halfWidth).toBeTruthy()
+			end,
+		},
+		{
+			"Rift Drain steals the opponent's gauge, and fires by itself once they have enough",
+			function()
+				local m = rallyWith({ "Drain" }, {})
+				m.gauge = { 2, 6 }
+				local events = m:useAbility(1, 1, m.shot.startTime + 0.1)
+				local used = find(events, "Ability")
+				expect(used.state).toBe("used")
+				expect(used.target).toBe(2)
+				expect(used.taken).toBe(Abilities.Tuning.Drain.amount)
+				expect(m.gauge[2]).toBe(6 - Abilities.Tuning.Drain.amount)
+				expect(used.targetGauge).toBe(m.gauge[2])
+				expect(m.gauge[1]).toBe(2 + Abilities.Tuning.Drain.amount - 2)
+				-- automatic: not while the opponent is low, then as soon as they have enough
+				local auto = Match.new(0, 1, { { "Drain" }, {} }, { auto = true })
+				auto:serve(auto.nextServeAt, 0, 0)
+				auto.gauge = { 5, Abilities.Tuning.Drain.minimum - 1 }
+				expect(#auto:autoUse(1, auto.shot.startTime + 0.1, 0)).toBe(0)
+				auto.gauge[2] = Abilities.Tuning.Drain.minimum
+				expect(find(auto:autoUse(1, auto.shot.startTime + 0.1, 0), "Ability").id).toBe("Drain")
+				expect(auto.gauge[2]).toBe(0)
 			end,
 		},
 		{

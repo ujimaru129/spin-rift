@@ -28,6 +28,9 @@ local CONFUSION = {
 	zigzagSd = 1.45, -- the swing makes the arrival hard to read early (for a 1.6-stud swing)
 	stallSd = 1.9, -- the stop throws the timing off (for a 0.4 s stop; a shorter one, less)
 	meteorSd = 1.15,
+	feintLead = 1, -- how much of the feint the bot believes before it reads the cut
+	feintRead = 0.25, -- share of the second leg gone before it reads the cut
+	kickSd = 1.15, -- the late, fast second leg throws the timing off
 }
 
 local Bot = {}
@@ -168,6 +171,15 @@ function Bot.watch(self: Bot, shot: Trajectory.Shot?)
 		end
 		if fx.meteor then
 			sd *= CONFUSION.meteorSd
+		end
+		if fx.feint then
+			-- it believes the ball is going the wrong way until it bounces
+			self.targetZ = shot.to.Z + fx.feint * 2 * CONFUSION.feintLead
+			local b = shot.bounceFraction
+			self.revealAt = Trajectory.timeAtProgress(shot, b + (1 - b) * CONFUSION.feintRead)
+		end
+		if fx.kick then
+			sd *= CONFUSION.kickSd
 		end
 		if self.jammedUntil and shot.startTime < self.jammedUntil then
 			sd *= Abilities.Tuning.EMP.timingSd

@@ -47,6 +47,19 @@ local LOOKS: { [string]: Look } = {
 		density = 0.36,
 		tint = Color3.fromRGB(255, 238, 242),
 	},
+	-- under the sea: deep blue water that swallows the distance (the scenery is drawn by Aquarium)
+	Aquarium = {
+		clock = 12,
+		brightness = 1.6,
+		ambient = Color3.fromRGB(70, 110, 150),
+		outdoor = Color3.fromRGB(90, 140, 180),
+		fog = { color = Color3.fromRGB(18, 78, 128), from = 60, to = 720 },
+		atmosphere = Color3.fromRGB(18, 78, 128),
+		decay = Color3.fromRGB(10, 40, 80),
+		haze = 2,
+		density = 0.4,
+		tint = Color3.fromRGB(215, 238, 255),
+	},
 }
 
 local atmosphere: Atmosphere? = nil

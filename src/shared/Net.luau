@@ -19,6 +19,7 @@ Net.REQUEST_LEADERBOARD = "RequestLeaderboard" -- client -> server: (scope: "GLO
 Net.SEND_FEEDBACK = "SendFeedback"
 Net.EQUIP = "Equip" -- client -> server: (kind: "paddle" | "trail" | "title", itemId: string) — "" for none
 Net.BUY_PREMIUM = "BuyPremium" -- client -> server: () — buy this season's Premium Battle Pass
+Net.BUY_ITEM = "BuyItem" -- client -> server: (itemId: string) — buy a shop item (see Season/Shop)
 Net.MATCH_EVENT = "MatchEvent" -- server -> client: (event: { kind: string, ... })
 
 -- Set this attribute on ReplicatedStorage in Studio (e.g. 200) to add that many ms of round-trip
@@ -34,6 +35,7 @@ local REMOTES = {
 	Net.SEND_FEEDBACK,
 	Net.EQUIP,
 	Net.BUY_PREMIUM,
+	Net.BUY_ITEM,
 	Net.MATCH_EVENT,
 }
 

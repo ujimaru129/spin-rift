@@ -29,6 +29,7 @@ local RankedResult = require(script.Parent.RankedResult)
 local RankedRoom = require(script.Parent.RankedRoom)
 local Analytics = require(script.Parent.Analytics)
 local Progression = require(script.Parent.Progression)
+local Shop = require(script.Parent.Shop)
 local SeasonFolder = Shared:WaitForChild("Season")
 local Arenas = require(SeasonFolder:WaitForChild("Arenas"))
 local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
@@ -348,7 +349,8 @@ local function begin(
 	local origin = Vector3.new(0, 200, slot * ARENA_SPACING)
 	local arenaDef = Arenas.get(arenaId or Arenas.DEFAULT) or Arenas.List[1]
 	-- gimmicks are for casual play only; ranked is always fair
-	local windy = arenaDef.wind and mode ~= RANKED and mode ~= TUTORIAL
+	local gimmicks = mode ~= RANKED and mode ~= TUTORIAL
+	local windy = arenaDef.wind and gimmicks
 	local session: Session = {
 		mode = mode,
 		slot = slot,
@@ -357,6 +359,7 @@ local function begin(
 		match = Match.new(now(), firstServer, { seats[1].loadout, seats[2].loadout }, {
 			auto = true,
 			windAt = if windy then Arenas.windAt else nil,
+			drag = if gimmicks then arenaDef.drag else nil,
 			idleLimit = if mode == ONLINE or mode == RANKED then IDLE_LIMIT else nil,
 		}),
 		seats = seats,
@@ -464,11 +467,12 @@ function MatchService.startRanked(players: { Player }, loadouts: { { string } },
 		removeFromQueue(p)
 	end
 	-- an arena both players have unlocked (looks only: no gimmicks in ranked)
-	local choices = Arenas.shared(PlayerData.get(players[1].UserId).best, PlayerData.get(players[2].UserId).best)
+	local d1, d2 = PlayerData.get(players[1].UserId), PlayerData.get(players[2].UserId)
+	local choices = Arenas.shared(d1.best, d2.best, d1.items, d2.items)
 	local arena = choices[math.random(1, math.max(#choices, 1))]
 	begin(RANKED, {
-		humanSeat(1, players[1], Abilities.sanitize(loadouts[1])),
-		humanSeat(2, players[2], Abilities.sanitize(loadouts[2])),
+		humanSeat(1, players[1], Abilities.sanitize(loadouts[1], d1.items)),
+		humanSeat(2, players[2], Abilities.sanitize(loadouts[2], d2.items)),
 	}, math.random(1, 2), onOver, arena)
 end
 
@@ -556,11 +560,11 @@ local function chooseArena(player: Player, requested: unknown): string
 	then
 		return requested
 	end
-	if type(requested) == "string" and Arenas.unlocked(requested, data.best) then
+	if type(requested) == "string" and Arenas.unlocked(requested, data.best, data.items) then
 		data.arena = requested
 		return requested
 	end
-	return if Arenas.unlocked(data.arena, data.best) then data.arena else Arenas.DEFAULT
+	return if Arenas.unlocked(data.arena, data.best, data.items) then data.arena else Arenas.DEFAULT
 end
 
 local function request(player: Player, mode: unknown, loadout: unknown, arenaRequest: unknown)
@@ -572,7 +576,7 @@ local function request(player: Player, mode: unknown, loadout: unknown, arenaReq
 	end
 	local isBot = (Bot.Profiles :: any)[mode] ~= nil
 	leave(player, if isBot then "bot" elseif mode == RANKED then "requeue" else "other")
-	local chosen = Abilities.sanitize(loadout)
+	local chosen = Abilities.sanitize(loadout, PlayerData.get(player.UserId).items)
 	local arena = chooseArena(player, arenaRequest)
 	if mode == RANKED then
 		if RankedRoom.isRoom() then
@@ -718,6 +722,9 @@ function MatchService.start()
 	Net.get(Net.BUY_PREMIUM).OnServerEvent:Connect(function(player)
 		task.spawn(Progression.buyPremium, player)
 	end)
+	Net.get(Net.BUY_ITEM).OnServerEvent:Connect(function(player, id)
+		task.spawn(Shop.buy, player, id)
+	end)
 	Net.get(Net.SEND_FEEDBACK).OnServerEvent:Connect(function(player, category, text, locale)
 		task.spawn(function()
 			fire(player, { kind = "FeedbackResult", status = Feedback.submit(player, category, text, locale) })
@@ -739,6 +746,7 @@ function MatchService.start()
 	end)
 	RankedQueue.init({ fire = fire, startLocal = startLocalRanked })
 	Progression.start(fire)
+	Shop.start(fire)
 	if RankedRoom.isRoom() then
 		task.spawn(RankedRoom.start, { fire = fire, startRanked = MatchService.startRanked })
 	end

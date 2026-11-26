@@ -27,6 +27,8 @@ export type Effects = {
 	stallFactor: number?,
 	meteor: boolean?, -- Meteor Drop: a much higher first arc, narrower timing windows
 	wind: number?, -- Sakura Float: sideways drift in studs, already included in `to`
+	feint: number?, -- Feint: heads this far the wrong way, then cuts back after the bounce
+	kick: boolean?, -- Spin Kick: a late bounce and a fast second leg, narrower timing windows
 }
 
 export type Shot = {
@@ -68,6 +70,16 @@ local function curveOffset(shot: Shot, s: number): number
 		-- the ball leaves aimed where the player pointed and drifts more and more with the wind
 		z -= w * s * (1 - s)
 	end
+	local f = shot.effects.feint
+	if f then
+		local b = shot.bounceFraction
+		if s < b then
+			z += f * s / b
+		else
+			local u = (s - b) / (1 - b)
+			z += f * (1 - u) ^ 3 -- a sharp cut right after the bounce
+		end
+	end
 	return z
 end
 
@@ -75,6 +87,7 @@ end
 -- aimZ is where across the table (Z) the ball should arrive at the opponent's paddle;
 -- it is clamped to how wide this kind of shot can go. ability = a shot ability to apply.
 -- pace = how much the rally has sped up (shortens the flight; see Config.Pace).
+-- drag = flight time multiplier for the arena (Aquarium Dome's water: a little slower), nil for none.
 function Trajectory.plan(
 	from: Vector3,
 	hitterSide: number,
@@ -83,7 +96,8 @@ function Trajectory.plan(
 	startTime: number,
 	ability: string?,
 	wind: number?,
-	pace: number?
+	pace: number?,
+	drag: number?
 ): Shot
 	local style = (Config.Shots :: any)[kind] :: Config.ShotStyle
 	assert(style, "unknown shot kind: " .. tostring(kind))
@@ -101,7 +115,7 @@ function Trajectory.plan(
 	local bounceZ = math.clamp(lerp(from.Z, toZ, along), -sideLimit, sideLimit)
 
 	local speedUp = math.clamp(pace or 0, 0, Config.Pace.max)
-	local duration, arc1, arc2 = style.duration * (1 - speedUp), style.arc1, style.arc2
+	local duration, arc1, arc2 = style.duration * (1 - speedUp) * (drag or 1), style.arc1, style.arc2
 	local effects: Effects = { ability = ability, wind = if wind and wind ~= 0 then wind else nil }
 	if ability == "Smash" then
 		local t = Abilities.Tuning.Smash
@@ -116,6 +130,9 @@ function Trajectory.plan(
 	elseif ability == "Meteor" then
 		arc1 *= Abilities.Tuning.Meteor.arc
 		effects.meteor = true
+	elseif ability == "SpinKick" then
+		fraction = Abilities.Tuning.SpinKick.bounceAt
+		effects.kick = true
 	end
 
 	local shot: Shot = {
@@ -155,6 +172,15 @@ function Trajectory.plan(
 			amount *= 0.8
 		end
 		effects.zigzag = amount
+	elseif ability == "Feint" then
+		-- head for the other side of the table first; shrink it if the bounce would leave the table
+		local sign = if toZ > 0 then -1 elseif toZ < 0 then 1 else (if from.Z > 0 then -1 else 1)
+		local amount = Abilities.Tuning.Feint.amount
+		local edge = Config.Table.halfWidth - 0.4
+		while amount > 0.2 and math.abs(bounceZ + sign * amount) > edge do
+			amount *= 0.8
+		end
+		effects.feint = sign * amount
 	elseif ability == "QuantumStop" then
 		-- stop where the ball crosses the net
 		local u = (0 - from.X) / (bounceX - from.X)
@@ -295,6 +321,8 @@ function Trajectory.windowScale(shot: Shot): number
 		k = Abilities.Tuning.Smash.window
 	elseif fx.meteor then
 		k = Abilities.Tuning.Meteor.window
+	elseif fx.kick then
+		k = Abilities.Tuning.SpinKick.window
 	elseif fx.ability == "BarrierReturn" then
 		k = Abilities.Tuning.Barrier.returnWindow
 	elseif shot.kind == "Weak" then

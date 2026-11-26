@@ -40,6 +40,9 @@ return function(loader, expect)
 			onEquip = function(kind, id)
 				table.insert(calls, "equip:" .. kind .. ":" .. id)
 			end,
+			onBuy = function(id)
+				table.insert(calls, "buy:" .. id)
+			end,
 		})
 		return hud, calls
 	end
@@ -228,6 +231,41 @@ return function(loader, expect)
 				expect(m.PrimaryPart.Position).toBe(origin)
 				Garden.show(nil)
 				expect(globals.workspace:FindFirstChild("SakuraGarden")).toBe(nil)
+			end,
+		},
+		{
+			"the Aquarium dome builds round the arena, keeps the view down the table open, and hides",
+			function()
+				local Aquarium = loader.require("src/client/Aquarium")
+				local origin = Vector3.new(0, 200, 1200)
+				Aquarium.show(origin, -1)
+				local m = globals.workspace:FindFirstChild("AquariumDome")
+				local parts = #m:GetChildren()
+				expect(parts > 400 and parts < 2500).toBeTruthy()
+				expect(Aquarium.swimmerCount() > 100).toBeTruthy()
+				local function check()
+					for _, p in m:GetChildren() do
+						if p ~= m.PrimaryPart and (p.Transparency or 0) < 1 then
+							local at = p.Position - origin
+							-- (the top of the dome and the water's surface are far overhead, out of view)
+							local arena = math.sqrt(at.X ^ 2 + at.Z ^ 2) < 26 and at.Y > -10 and at.Y < 40
+							local corridor = at.X > 0 and at.X < 60 and math.abs(at.Z) < 14 and at.Y > -4 and at.Y < 30
+							if arena or corridor then
+								error(`aquarium part {p.Name} in the way at {at}`)
+							end
+						end
+					end
+				end
+				check()
+				-- fish keep clear while they swim
+				for _ = 1, 40 do
+					globals.game:GetService("RunService").Heartbeat:Fire(0.5)
+				end
+				check()
+				Aquarium.show(origin, 1)
+				expect(m.PrimaryPart.Position).toBe(origin)
+				Aquarium.show(nil)
+				expect(globals.workspace:FindFirstChild("AquariumDome")).toBe(nil)
 			end,
 		},
 		{
@@ -1189,6 +1227,145 @@ return function(loader, expect)
 				local n = #calls
 				galaxy.Activated:Fire()
 				expect(#calls).toBe(n)
+				-- a shop trail shows its price and offers to buy it
+				for _, b in hud.cosGrids.trail:GetChildren() do
+					if b:GetAttribute("ItemId") == "trail_mint" then
+						expect(string.find(b.Text, "49 Robux", 1, true) ~= nil).toBeTruthy()
+						b.Activated:Fire()
+					end
+				end
+				expect(calls[#calls]).toBe("buy:trail_mint")
+			end,
+		},
+		{
+			"the shop lists every item in all six languages; shop moves stay locked until bought",
+			function()
+				local S = loader.require("src/shared/Strings")
+				local Shop = loader.require("src/shared/Season").Shop
+				local hud, calls = newHud()
+				local state = {
+					passXp = 0,
+					premium = false,
+					items = { "paddle_cyan" },
+					equipped = { paddle = "paddle_cyan", trail = "", title = "" },
+				}
+				hud:setPassState(state)
+				hud:showShop()
+				expect(hud.shop.Visible).toBe(true)
+				local rows = {}
+				for _, b in hud.shopRows:GetChildren() do
+					if b:IsA("TextButton") then
+						rows[b:GetAttribute("ItemId")] = b
+					end
+				end
+				for _, item in Shop.Items do
+					expect(rows[item.id] ~= nil).toBeTruthy()
+				end
+				for _, locale in S.LOCALES do
+					S.setLocale(locale)
+					hud:relabel()
+					for _, b in hud.shopRows:GetChildren() do
+						if b:IsA("TextButton") and (string.find(b.Text, "_", 1, true) or string.find(b.Text, "%.")) then
+							error(`{locale}: untranslated shop row {b.Text}`)
+						end
+					end
+				end
+				S.setLocale("ja")
+				hud:relabel()
+				-- a locked move shows its price; clicking it offers it instead of picking it
+				expect(string.find(hud.pickChips.Feint.Text, "149 Robux", 1, true) ~= nil).toBeTruthy()
+				hud.pickChips.Feint.Activated:Fire()
+				expect(calls[#calls]).toBe("buy:ability_Feint")
+				expect(table.find(hud:getLoadout(), "Feint")).toBe(nil)
+				expect(string.find(hud.pickInfo.Text, "フェイントショット") ~= nil).toBeTruthy()
+				-- once bought it can be picked, and the shop says it is owned
+				table.insert(state.items, "ability_Feint")
+				hud:setPassState(state)
+				hud.pickChips.Feint.Activated:Fire()
+				expect(table.find(hud:getLoadout(), "Feint") ~= nil).toBeTruthy()
+				for _, b in hud.shopRows:GetChildren() do
+					if b:IsA("TextButton") and b:GetAttribute("ItemId") == "ability_Feint" then
+						expect(string.find(b.Text, "購入済み") ~= nil).toBeTruthy()
+						local n = #calls
+						b.Activated:Fire()
+						expect(#calls).toBe(n) -- nothing to buy
+					end
+				end
+				-- losing it (another account's data, say) drops it from the loadout
+				table.remove(state.items)
+				hud:setPassState(state)
+				expect(table.find(hud:getLoadout(), "Feint")).toBe(nil)
+			end,
+		},
+		{
+			"shop items are bought end to end: granted, kept, and usable only by their owner",
+			function()
+				local Shop = loader.require("src/shared/Season").Shop
+				local PlayerData = loader.require("src/server/PlayerData")
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local market = globals.game:GetService("MarketplaceService")
+				local me = Fake.localPlayer
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				local function last(kind)
+					for i = #seen, 1, -1 do
+						if seen[i].kind == kind then
+							return seen[i]
+						end
+					end
+					return nil
+				end
+				-- before buying, the shop move is dropped from the loadout
+				remotes.RequestMatch:FireServer("Easy", { "Feint", "Smash" }, "Rooftop")
+				expect(table.concat(last("Start").loadout, ",")).toBe("Smash")
+				remotes.LeaveMatch:FireServer()
+				-- in Studio the buy button grants it, and tells the client
+				remotes.BuyItem:FireServer("ability_Feint")
+				local up = last("PassUpdate")
+				expect(up.bought).toBe("ability_Feint")
+				expect(table.find(up.state.items, "ability_Feint") ~= nil).toBeTruthy()
+				expect(Fake.dataStores.PlayerData_v1["u_" .. me.UserId].items.ability_Feint).toBe(true)
+				remotes.RequestMatch:FireServer("Easy", { "Feint", "Smash" }, "Rooftop")
+				expect(table.concat(last("Start").loadout, ",")).toBe("Feint,Smash")
+				remotes.LeaveMatch:FireServer()
+				-- nonsense and items already owned are ignored
+				local count = #seen
+				remotes.BuyItem:FireServer("ability_Feint")
+				remotes.BuyItem:FireServer("paddle_nope")
+				remotes.BuyItem:FireServer(42)
+				expect(#seen).toBe(count)
+				-- the Aquarium: bought instead of reaching Silver
+				PlayerData.get(me.UserId).best = 1000
+				remotes.RequestMatch:FireServer("Easy", { "Curve" }, "Aquarium")
+				expect(last("Start").arena).toBe("Rooftop")
+				remotes.LeaveMatch:FireServer()
+				remotes.BuyItem:FireServer("arena_Aquarium")
+				remotes.RequestMatch:FireServer("Easy", { "Curve" }, "Aquarium")
+				expect(last("Start").arena).toBe("Aquarium")
+				expect(globals.workspace:FindFirstChild("AquariumDome") ~= nil).toBeTruthy()
+				remotes.LeaveMatch:FireServer()
+				-- in a published game the button opens Roblox's purchase prompt; the item arrives
+				-- when Roblox says the pass was bought
+				local item = Shop.get("trail_crimson") :: any
+				item.passId = 777
+				local prompted = nil
+				local prompt = market.PromptGamePassPurchase
+				market.PromptGamePassPurchase = function(_, _player, passId)
+					prompted = passId
+				end
+				Fake.studio = false
+				remotes.BuyItem:FireServer("trail_crimson")
+				expect(prompted).toBe(777)
+				expect(PlayerData.get(me.UserId).items.trail_crimson).toBe(nil)
+				market.PromptGamePassPurchaseFinished:Fire(me, 777, true)
+				expect(PlayerData.get(me.UserId).items.trail_crimson).toBe(true)
+				expect(last("PassUpdate").bought).toBe("trail_crimson")
+				Fake.studio = true
+				market.PromptGamePassPurchase = prompt
+				item.passId = 0
 			end,
 		},
 	}

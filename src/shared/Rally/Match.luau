@@ -36,6 +36,7 @@ export type Match = typeof(setmetatable(
 		slowedUntil: { number }, -- Gravity Well: server time each player's movement is slowed until
 		whiffed: Trajectory.Shot?, -- a barrier-protected miss: no second swing at the same ball
 		windAt: ((time: number) -> number)?, -- arena wind (casual Sakura Float), nil for none
+		drag: number?, -- arena flight-time multiplier (casual Aquarium Dome), nil for none
 		idle: { number }, -- points each player has lost in a row without doing anything
 		auto: boolean, -- abilities fire by themselves (see autoUse); false only in rule tests
 		idleLimit: number?, -- that many idle points in a row loses the match (nil = no limit)
@@ -54,7 +55,12 @@ end
 -- idleLimit: a player who lets this many balls go by in a row without swinging, serving by
 -- hand or using an ability loses the match (reason "idle"). For player-vs-player matches,
 -- so two players who both walk away cannot keep a deuce going forever.
-export type Options = { windAt: ((time: number) -> number)?, idleLimit: number?, auto: boolean? }
+export type Options = {
+	windAt: ((time: number) -> number)?,
+	drag: number?,
+	idleLimit: number?,
+	auto: boolean?,
+}
 
 function Match.new(now: number, firstServer: number?, loadouts: { { string } }?, options: Options?): Match
 	local first = firstServer or 1
@@ -80,6 +86,7 @@ function Match.new(now: number, firstServer: number?, loadouts: { { string } }?,
 		slowedUntil = { 0, 0 },
 		whiffed = nil :: Trajectory.Shot?,
 		windAt = if options then options.windAt else nil,
+		drag = if options then options.drag else nil,
 		idle = { 0, 0 },
 		auto = if options then options.auto == true else false,
 		idleLimit = if options then options.idleLimit else nil,
@@ -113,7 +120,7 @@ function Match.serve(self: Match, now: number, fromZ: number, aimZ: number, auto
 	end
 	local side = Match.sideOf(self.server)
 	local from = Vector3.new(side * Config.HitX, Config.HitY, fromZ)
-	local shot = Trajectory.plan(from, side, aimZ, "Serve", now, nil, self:wind(now))
+	local shot = Trajectory.plan(from, side, aimZ, "Serve", now, nil, self:wind(now), nil, self.drag)
 	self.shot = shot
 	self.receiver = Match.other(self.server)
 	self.rally = 0
@@ -212,7 +219,7 @@ function Match._returnBall(self: Match, index: number, time: number, grade: stri
 		ability = "BarrierReturn"
 	end
 	local pace = math.min(self.rally * Config.Pace.perReturn, Config.Pace.max)
-	local nextShot = Trajectory.plan(from, side, aimZ, kind, time, ability, self:wind(time), pace)
+	local nextShot = Trajectory.plan(from, side, aimZ, kind, time, ability, self:wind(time), pace, self.drag)
 	self.shot = nextShot
 	self.receiver = Match.other(index)
 	table.insert(events, 1, {
@@ -324,12 +331,21 @@ function Match.useAbility(self: Match, index: number, slot: number, now: number,
 		local target = Match.other(index)
 		used.target = target
 		used.untilTime = now + Abilities.Tuning.EMP.length
+	elseif id == "Drain" then
+		-- takes part of the opponent's gauge away
+		local target = Match.other(index)
+		local taken = math.min(self.gauge[target], Abilities.Tuning.Drain.amount)
+		self.gauge[target] -= taken
+		self.gauge[index] = math.min(Config.Gauge.max, self.gauge[index] + taken)
+		used.target = target
+		used.taken = taken
+		used.targetGauge = self.gauge[target]
 	elseif id == "Blink" then
 		local d = dirZ or 0
 		used.dirZ = if d > 0 then 1 elseif d < 0 then -1 else 0
 		used.distance = Abilities.Tuning.Blink.distance
 	end
-	self.gauge[index] -= def.cost
+	self.gauge[index] = math.max(self.gauge[index] - def.cost, 0)
 	self:_spent(index, id)
 	used.gauge = self.gauge[index]
 	used.nextSlot = self.nextSlot[index]
@@ -372,6 +388,8 @@ function Match.autoUse(self: Match, index: number, now: number, playerZ: number)
 	local go = false
 	if def.id == "GravityWell" or def.id == "EMP" then
 		go = not receiving
+	elseif def.id == "Drain" then
+		go = self.gauge[Match.other(index)] >= Abilities.Tuning.Drain.minimum
 	elseif not receiving or left <= 0 then
 		go = false
 	elseif def.id == "Blink" then
