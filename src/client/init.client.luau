@@ -58,9 +58,10 @@ local shake = 0
 local cameraZ = 0
 -- Match camera: how far behind the paddle line it sits, how high, and its field of view.
 -- Close and narrow enough that the table fills the middle of a phone screen.
-local MATCH_FOV = 46
-local CAMERA_BACK = 14
-local CAMERA_HEIGHT = 10
+local MATCH_FOV = 40
+local CAMERA_BACK = 10
+local CAMERA_HEIGHT = 11
+local CAMERA_FOCUS = 3 -- how far past the net it aims
 local lastSwingSent = 0
 local selectedArena = Arenas.DEFAULT
 local bestRating = 1000
@@ -719,7 +720,7 @@ RunService.RenderStepped:Connect(function(dt)
 	local z = if root then root.Position.Z - o.Z else 0
 	cameraZ += (z - cameraZ) * math.min(dt * 4, 1)
 	local eye = o + Vector3.new(mySide * (Config.HitX + CAMERA_BACK), CAMERA_HEIGHT, cameraZ * 0.55)
-	local focus = o + Vector3.new(-mySide * 2, Config.Table.surfaceY, cameraZ * 0.25)
+	local focus = o + Vector3.new(-mySide * CAMERA_FOCUS, Config.Table.surfaceY, cameraZ * 0.25)
 	local cf = CFrame.lookAt(eye, focus)
 	if shake > 0 then
 		shake = math.max(0, shake - dt)
