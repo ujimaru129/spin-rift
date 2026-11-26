@@ -878,16 +878,20 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	aim.Size = UDim2.fromOffset(220, 24)
 	aim.Visible = false
 
-	local announce = label(match, "", 26, INK)
-	announce.AnchorPoint = Vector2.new(0.5, 0.5)
-	announce.Position = UDim2.fromScale(0.5, 0.24)
-	announce.Size = UDim2.fromOffset(600, 34)
+	-- special moves going off and the opponent's loadout: low on the screen, off the table
+	-- (computers: above the aim marker and the slots; phones: just above the hint line)
+	local announce = label(match, "", 22, INK)
+	announce.AnchorPoint = Vector2.new(0.5, 1)
+	announce.Position = UDim2.new(0.5, 0, 1, -150)
+	announce.Size = UDim2.fromOffset(600, 30)
 	announce.TextTransparency = 1
 	announce.TextWrapped = true
 	if UserInputService.TouchEnabled then
-		-- between the how-to-play box and the ability slots
-		announce.Size = UDim2.fromOffset(300, 44)
-		announce.TextSize = 16
+		-- between the gauge (left) and the HIT button (right)
+		announce.Position = UDim2.new(0.5, 0, 1, -54)
+		announce.Size = UDim2.fromOffset(260, 40)
+		announce.TextSize = 15
+		announce.TextYAlignment = Enum.TextYAlignment.Bottom
 	end
 	local announceStroke = Instance.new("UIStroke")
 	announceStroke.Thickness = 2
