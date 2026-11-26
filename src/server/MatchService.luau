@@ -544,6 +544,16 @@ end
 -- The arena a player asked for, if they have unlocked it; remembered for next time.
 local function chooseArena(player: Player, requested: unknown): string
 	local data = PlayerData.get(player.UserId)
+	-- Studio only: with the workspace attribute UnlockAllArenas set, any arena can be tried
+	-- (nothing is remembered or saved for it)
+	if
+		RunService:IsStudio()
+		and workspace:GetAttribute("UnlockAllArenas") == true
+		and type(requested) == "string"
+		and Arenas.get(requested)
+	then
+		return requested
+	end
 	if type(requested) == "string" and Arenas.unlocked(requested, data.best) then
 		data.arena = requested
 		return requested
