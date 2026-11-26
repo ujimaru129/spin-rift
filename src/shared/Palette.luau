@@ -12,6 +12,8 @@ return {
 	Night = Color3.fromRGB(11, 13, 36),
 	WindowWarm = Color3.fromRGB(255, 210, 154),
 	WindowCool = Color3.fromRGB(127, 243, 255),
+	-- The ball itself: orange, so it stands out against the white and cyan neon of the table.
+	Ball = Color3.fromRGB(255, 140, 30),
 
 	-- Ball trail by shot kind: faster shots move from white to blue to purple.
 	Shot = {

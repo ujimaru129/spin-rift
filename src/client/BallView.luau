@@ -53,7 +53,7 @@ function BallView.new(): BallView
 	ball.Shape = Enum.PartType.Ball
 	ball.Size = Vector3.one * Config.Ball.radius * 2
 	ball.Material = Enum.Material.Neon
-	ball.Color = Color3.new(1, 1, 1)
+	ball.Color = Palette.Ball
 	ball.Anchored = true
 	ball.CanCollide = false
 	ball.CanQuery = false
@@ -100,7 +100,7 @@ function BallView.new(): BallView
 	local outline = Instance.new("Highlight")
 	outline.Adornee = ball
 	outline.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	outline.FillColor = Color3.new(1, 1, 1)
+	outline.FillColor = Palette.Ball
 	outline.FillTransparency = 0.2
 	outline.OutlineColor = Color3.new(1, 1, 1)
 	outline.OutlineTransparency = 0
@@ -188,9 +188,11 @@ function BallView._style(self: BallView, shot: Trajectory.Shot)
 	self.baseColor = color
 	self.trail.Color = ColorSequence.new(color)
 	self.trail.Lifetime = if fx.smash then 0.35 elseif fx.meteor then 0.5 else 0.22
-	self.light.Color = color
+	-- the trail tells the shot; the ball stays orange (and lights the table orange) unless a
+	-- special move is on it
+	self.light.Color = if fx.ability then color else Palette.Ball
 	self.light.Brightness = if fx.ability then 5 else 2.5
-	self.ball.Color = color:Lerp(Color3.new(1, 1, 1), 0.6)
+	self.ball.Color = Palette.Ball
 	self.ball.Transparency = 0
 	self.trail.Enabled = true
 	for _, g in self.ghosts do
