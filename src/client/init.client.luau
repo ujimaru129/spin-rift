@@ -59,9 +59,9 @@ local cameraZ = 0
 -- Match camera: how far behind the paddle line it sits, how high, and its field of view.
 -- Close and narrow enough that the table fills the middle of a phone screen.
 local MATCH_FOV = 40
-local CAMERA_BACK = 10
+local CAMERA_BACK = 12
 local CAMERA_HEIGHT = 11
-local CAMERA_FOCUS = 3 -- how far past the net it aims
+local CAMERA_FOCUS = 1 -- how far past the net it aims
 local lastSwingSent = 0
 local selectedArena = Arenas.DEFAULT
 local bestRating = 1000
