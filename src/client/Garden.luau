@@ -311,11 +311,13 @@ local function build(): Model
 		gui.Parent = panel
 	end
 
-	-- the low sun and its halo, up and left of the opponent (clear of the phone buttons)
-	local sun = ball(m, v(620, 150, -130), 70, SUN, true)
+	-- the low sun and its halo, setting into the cloud sea just left of the opponent. The match
+	-- camera looks down at the table, so on a phone the real sky sits behind the top bar: the sun
+	-- is brought in close (inside the fog) and low enough to show in the gap beside the opponent.
+	local sun = ball(m, v(307, -50, -64), 40, SUN, true)
 	glow(sun, SUN, 60, 1)
-	ball(m, v(630, 150, -132), 120, Color3.fromRGB(255, 170, 170), true).Transparency = 0.75
-	ball(m, v(640, 150, -134), 190, Color3.fromRGB(255, 150, 190), true).Transparency = 0.88
+	ball(m, v(312, -50, -65), 68, Color3.fromRGB(255, 170, 170), true).Transparency = 0.7
+	ball(m, v(317, -50, -66), 108, Color3.fromRGB(255, 150, 190), true).Transparency = 0.85
 
 	-- a sea of clouds below, warmer towards the sun
 	for _ = 1, 70 do
