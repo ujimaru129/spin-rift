@@ -85,6 +85,18 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"full aim reaches the side line: Perfect in the corner, Good near it",
+			function()
+				local from = Vector3.new(-Config.HitX, Config.HitY, 0)
+				local edge = Config.Table.halfWidth
+				local perfect = Trajectory.plan(from, -1, Config.MaxAim, "Perfect", 0)
+				local good = Trajectory.plan(from, -1, -Config.MaxAim, "Good", 0)
+				expect(perfect.bounce.Z >= edge - Config.BounceMargin - 0.01).toBeTruthy()
+				expect(good.bounce.Z <= -(edge - 1.2)).toBeTruthy()
+				expect(math.abs(good.bounce.Z) <= edge).toBeTruthy()
+			end,
+		},
+		{
 			"a perfect return is faster than a weak one",
 			function()
 				local from = Vector3.new(-Config.HitX, Config.HitY, 0)

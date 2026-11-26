@@ -88,13 +88,17 @@ function Trajectory.plan(
 	local style = (Config.Shots :: any)[kind] :: Config.ShotStyle
 	assert(style, "unknown shot kind: " .. tostring(kind))
 	local dir = -hitterSide -- the ball travels toward the other side
-	local aimLimit = math.min(style.aim, Config.Table.halfWidth - 0.5)
+	local aimLimit = style.aim
 	-- wind may still blow a ball out to the normal margin, but no further
 	local limit = math.max(aimLimit, Config.Table.halfWidth - Config.AimMargin)
 	local toZ = math.clamp(math.clamp(aimZ, -aimLimit, aimLimit) + (wind or 0), -limit, limit)
 	local fraction = Config.BounceFraction
 	local bounceX = dir * Config.Table.halfLength * style.depth
-	local bounceZ = math.clamp(lerp(from.Z, toZ, fraction), -limit, limit)
+	-- straight line from the paddle to the target (seen from above), bouncing on the way
+	local toX = dir * Config.HitX
+	local along = math.abs(bounceX - from.X) / math.max(math.abs(toX - from.X), 1e-3)
+	local sideLimit = Config.Table.halfWidth - Config.BounceMargin
+	local bounceZ = math.clamp(lerp(from.Z, toZ, along), -sideLimit, sideLimit)
 
 	local speedUp = math.clamp(pace or 0, 0, Config.Pace.max)
 	local duration, arc1, arc2 = style.duration * (1 - speedUp), style.arc1, style.arc2

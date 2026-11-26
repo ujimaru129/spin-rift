@@ -125,7 +125,7 @@ local function gaussian(random: RandomFn): number
 end
 
 function Bot.pickAim(self: Bot): number
-	return self.random(-1, 1) * Config.MaxAim * self.profile.aimSpread
+	return self.random(-1, 1) * Config.BotMaxAim * self.profile.aimSpread
 end
 
 -- Tell the bot about a new shot (or an updated one, after Time Slow).

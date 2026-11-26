@@ -42,18 +42,26 @@ Config.IgnoreEarlierThan = 0.45
 -- Shape of each kind of shot. duration = seconds from contact to the opponent's paddle.
 -- arc1 = extra height over the first leg (to the bounce), arc2 = over the second leg.
 -- depth = where on the opponent's half it bounces, 0 at the net to 1 at the end line.
--- aim = how far from the middle (|Z| at the opponent's paddle) the shot can be placed: only a
--- Perfect return reaches the corners, so timing well is what lets you move the opponent around.
+-- aim = how far from the middle (|Z| at the opponent's paddle, past the end of the table) the
+-- shot can be placed. The ball flies straight (seen from above), so it bounces on the way there:
+-- a Perfect at full aim bounces in the corner, a Good near the side line, a Weak well inside it.
 export type ShotStyle = { duration: number, arc1: number, arc2: number, depth: number, aim: number }
 Config.Shots = {
-	Serve = { duration = 1.25, arc1 = 1.4, arc2 = 2.2, depth = 0.55, aim = 3 } :: ShotStyle,
-	Perfect = { duration = 0.7, arc1 = 1.0, arc2 = 1.3, depth = 0.8, aim = 4.5 } :: ShotStyle,
-	Good = { duration = 1.05, arc1 = 2.0, arc2 = 2.0, depth = 0.6, aim = 3 } :: ShotStyle,
-	Weak = { duration = 1.35, arc1 = 3.4, arc2 = 2.8, depth = 0.4, aim = 2.2 } :: ShotStyle,
+	Serve = { duration = 1.25, arc1 = 1.4, arc2 = 2.2, depth = 0.55, aim = 4.5 } :: ShotStyle,
+	Perfect = { duration = 0.7, arc1 = 1.0, arc2 = 1.3, depth = 0.8, aim = 6.5 } :: ShotStyle,
+	Good = { duration = 1.05, arc1 = 2.0, arc2 = 2.0, depth = 0.6, aim = 5.5 } :: ShotStyle,
+	Weak = { duration = 1.35, arc1 = 3.4, arc2 = 2.8, depth = 0.4, aim = 4 } :: ShotStyle,
 }
 
 -- The widest aim of any shot. Aim input from -1 to 1 maps onto this, then each shot kind clamps it.
-Config.MaxAim = 4.5
+Config.MaxAim = 6.5
+
+-- How wide the bots aim at most (their aimSpread scales this). Kept at the old width so the bots
+-- play as before while players can reach the corners.
+Config.BotMaxAim = 4.5
+
+-- The bounce stays at least this far inside the side lines.
+Config.BounceMargin = 0.4
 
 -- The rally speeds up: every return makes the next ball this much quicker (a share of its flight
 -- time), up to `max`, and the receiver's timing windows narrow by `window` times that share.
