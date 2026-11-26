@@ -34,17 +34,18 @@ local LOOKS: { [string]: Look } = {
 		density = 0.32,
 		tint = Color3.fromRGB(235, 240, 255),
 	},
-	-- sunset over floating gardens
+	-- sunset over floating gardens (the sky itself is painted by Garden; pink distance fog)
 	Sakura = {
-		clock = 17.6,
+		clock = 17.8,
 		brightness = 2,
-		ambient = Color3.fromRGB(120, 80, 110),
-		outdoor = Color3.fromRGB(170, 120, 150),
+		ambient = Color3.fromRGB(125, 90, 130),
+		outdoor = Color3.fromRGB(170, 125, 160),
+		fog = { color = Color3.fromRGB(235, 160, 180), from = 220, to = 1900 },
 		atmosphere = Color3.fromRGB(233, 160, 190),
 		decay = Color3.fromRGB(110, 70, 140),
 		haze = 2.2,
 		density = 0.36,
-		tint = Color3.fromRGB(255, 236, 244),
+		tint = Color3.fromRGB(255, 238, 242),
 	},
 }
 

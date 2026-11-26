@@ -275,11 +275,47 @@ local function build(): Model
 	pivot.Transparency = 1
 	m.PrimaryPart = pivot
 
+	-- the sunset sky: a ring of tall panels, glowing peach towards the sun (+X) and violet behind
+	for i = 0, 23 do
+		local a = i / 24 * math.pi * 2
+		local at = v(math.cos(a) * 700, 100, math.sin(a) * 700)
+		local panel = part(m, CFrame.lookAt(at, v(0, 100, 0)), v(190, 520, 1), Color3.new(0, 0, 0))
+		panel.Name = "Sky"
+		local warm = (math.cos(a) + 1) / 2 -- 1 facing the sun, 0 behind us
+		local function mix(cool: Color3, hot: Color3): Color3
+			return cool:Lerp(hot, warm)
+		end
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.LightInfluence = 0
+		gui.MaxDistance = 0
+		gui.CanvasSize = Vector2.new(64, 256)
+		local fill = Instance.new("Frame")
+		fill.Size = UDim2.fromScale(1, 1)
+		fill.BorderSizePixel = 0
+		fill.BackgroundColor3 = Color3.new(1, 1, 1)
+		local gradient = Instance.new("UIGradient")
+		gradient.Rotation = 90
+		-- the horizon is about 0.69 down the panel (eye height); the view spans roughly 0.2 to 1
+		gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, mix(Color3.fromRGB(30, 22, 70), Color3.fromRGB(50, 34, 100))),
+			ColorSequenceKeypoint.new(0.4, mix(Color3.fromRGB(90, 48, 130), Color3.fromRGB(140, 60, 150))),
+			ColorSequenceKeypoint.new(0.56, mix(Color3.fromRGB(170, 80, 160), Color3.fromRGB(235, 100, 155))),
+			ColorSequenceKeypoint.new(0.66, mix(Color3.fromRGB(230, 130, 170), Color3.fromRGB(255, 165, 140))),
+			ColorSequenceKeypoint.new(0.7, mix(Color3.fromRGB(245, 170, 180), Color3.fromRGB(255, 210, 160))),
+			ColorSequenceKeypoint.new(0.76, mix(Color3.fromRGB(210, 130, 170), Color3.fromRGB(240, 150, 165))),
+			ColorSequenceKeypoint.new(1, mix(Color3.fromRGB(120, 80, 140), Color3.fromRGB(170, 100, 150))),
+		})
+		gradient.Parent = fill
+		fill.Parent = gui
+		gui.Parent = panel
+	end
+
 	-- the low sun and its halo, far beyond the opponent
-	local sun = ball(m, v(620, 55, 140), 90, SUN, true)
+	local sun = ball(m, v(620, 95, 110), 70, SUN, true)
 	glow(sun, SUN, 60, 1)
-	ball(m, v(630, 55, 142), 150, Color3.fromRGB(255, 170, 170), true).Transparency = 0.75
-	ball(m, v(640, 55, 144), 230, Color3.fromRGB(255, 150, 190), true).Transparency = 0.88
+	ball(m, v(630, 95, 112), 120, Color3.fromRGB(255, 170, 170), true).Transparency = 0.75
+	ball(m, v(640, 95, 114), 190, Color3.fromRGB(255, 150, 190), true).Transparency = 0.88
 
 	-- a sea of clouds below, warmer towards the sun
 	for _ = 1, 70 do
