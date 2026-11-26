@@ -100,11 +100,11 @@ return function(loader, expect)
 				local smash = Trajectory.plan(from, -1, 0, "Perfect", 0, "Smash")
 				expect(normal.duration / smash.duration).toBeNear(1.6, 1e-6)
 				expect(Trajectory.heightOverNet(smash) >= Config.Table.surfaceY + Config.Table.netHeight).toBeTruthy()
-				-- a 0.1s late swing is Good on a normal ball but Weak on a Smash
+				-- a 0.12s late swing is Good on a normal ball but Weak on a Smash
 				local m = rallyWith({}, { "Smash" })
 				m.shot = smash
 				m.receiver = 2
-				local events = m:swing(2, Trajectory.arrivalTime(smash) + 0.1, 0, smash.to.Z)
+				local events = m:swing(2, Trajectory.arrivalTime(smash) + 0.12, 0, smash.to.Z)
 				expect(events[1].grade).toBe("Weak")
 			end,
 		},
@@ -237,7 +237,7 @@ return function(loader, expect)
 				local stop = Trajectory.plan(from, 1, 0, "Good", 0, "QuantumStop")
 				local t = Abilities.Tuning.QuantumStop
 				local a, b = stop.effects.stallStart :: number, stop.effects.stallEnd :: number
-				expect(b - a).toBe(t.length)
+				expect(b - a).toBeNear(t.length, 1e-9)
 				-- almost still during the stop, near the net
 				local p1, p2 = Trajectory.positionAt(stop, a + 0.01), Trajectory.positionAt(stop, b - 0.01)
 				expect((p2 - p1).Magnitude < 0.6).toBeTruthy()

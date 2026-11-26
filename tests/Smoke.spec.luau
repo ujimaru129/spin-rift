@@ -1057,7 +1057,7 @@ return function(loader, expect)
 			end,
 		},
 		{
-			"Sakura Float unlocks at Silver; casual play there has wind, and players show their cosmetics",
+			"Sakura Float unlocks at Bronze I; casual play there has wind, and players show their cosmetics",
 			function()
 				local RunService = globals.game:GetService("RunService")
 				local replicated = globals.game:GetService("ReplicatedStorage")
@@ -1078,7 +1078,7 @@ return function(loader, expect)
 				end
 				PlayerData.get(me.UserId).best = 1000
 				remotes.RequestMatch:FireServer("Easy", { "Curve", "Blink" }, "Sakura")
-				expect(lastStart().arena).toBe("Rooftop") -- still Bronze: not unlocked
+				expect(lastStart().arena).toBe("Rooftop") -- still Bronze II: not unlocked
 				remotes.LeaveMatch:FireServer()
 				PlayerData.get(me.UserId).best = 1150
 				remotes.RequestMatch:FireServer("Easy", { "Curve", "Blink" }, "Sakura")

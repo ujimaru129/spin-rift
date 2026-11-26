@@ -25,8 +25,8 @@ local CONFUSION = {
 	phantomMiss = 0.015,
 	phantomSd = 1.05,
 	blindSd = 1.5,
-	zigzagSd = 1.45, -- the swing makes the arrival hard to read early
-	stallSd = 1.9, -- the stop throws the timing off
+	zigzagSd = 1.45, -- the swing makes the arrival hard to read early (for a 1.6-stud swing)
+	stallSd = 1.9, -- the stop throws the timing off (for a 0.4 s stop; a shorter one, less)
 	meteorSd = 1.15,
 }
 
@@ -160,10 +160,11 @@ function Bot.watch(self: Bot, shot: Trajectory.Shot?)
 			sd *= CONFUSION.blindSd
 		end
 		if fx.zigzag then
-			sd *= CONFUSION.zigzagSd
+			sd *= 1 + (CONFUSION.zigzagSd - 1) * math.clamp(fx.zigzag / 1.6, 0, 1.5)
 		end
-		if fx.stallStart then
-			sd *= CONFUSION.stallSd
+		if fx.stallStart and fx.stallEnd then
+			local share = math.clamp((fx.stallEnd - fx.stallStart) / 0.4, 0, 1.5)
+			sd *= 1 + (CONFUSION.stallSd - 1) * share
 		end
 		if fx.meteor then
 			sd *= CONFUSION.meteorSd

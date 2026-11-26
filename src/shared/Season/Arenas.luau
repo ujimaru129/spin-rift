@@ -8,12 +8,14 @@ export type Arena = {
 	id: string,
 	unlockRating: number, -- best rating needed
 	unlockRank: string, -- rank id shown on the lock
+	unlockDivision: string?, -- and its division ("I"), if the lock is inside a rank
 	wind: boolean, -- Sakura Float: wind nudges the ball sideways
 }
 
 Arenas.List = {
 	{ id = "Rooftop", unlockRating = -math.huge, unlockRank = "Bronze", wind = false },
-	{ id = "Sakura", unlockRating = 1100, unlockRank = "Silver", wind = true },
+	-- Bronze I: a few wins in, so new players have something to reach for early
+	{ id = "Sakura", unlockRating = 1034, unlockRank = "Bronze", unlockDivision = "I", wind = true },
 } :: { Arena }
 
 Arenas.DEFAULT = "Rooftop"

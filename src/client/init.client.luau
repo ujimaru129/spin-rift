@@ -149,7 +149,7 @@ local function arenaButtonText(): string
 	local a = Arenas.get(selectedArena) or Arenas.List[1]
 	local text = S.t("menu.arena", { name = S.t("arena." .. a.id) })
 	if bestRating < a.unlockRating then
-		text ..= "  (" .. S.t("arena.locked", { rank = S.rank(a.unlockRank) }) .. ")"
+		text ..= "  (" .. S.t("arena.locked", { rank = S.rank(a.unlockRank, a.unlockDivision) }) .. ")"
 	elseif a.wind then
 		text ..= "\n" .. S.t("arena.windNote")
 	end

@@ -68,11 +68,15 @@ return function(loader, expect)
 			end,
 		},
 		{
-			"Sakura Float unlocks at Silver, and ranked uses an arena both players have",
+			"Sakura Float unlocks at Bronze I, and ranked uses an arena both players have",
 			function()
 				expect(Arenas.unlocked("Rooftop", 0)).toBe(true)
-				expect(Arenas.unlocked("Sakura", 1099)).toBe(false)
-				expect(Arenas.unlocked("Sakura", 1100)).toBe(true)
+				expect(Arenas.unlocked("Sakura", 1033)).toBe(false)
+				expect(Arenas.unlocked("Sakura", 1034)).toBe(true)
+				local Rating = loader.require("src/shared/Rank").Rating
+				local sakura = Arenas.get("Sakura") :: any
+				expect(Rating.tier(sakura.unlockRating).label).toBe("ブロンズ I")
+				expect(Rating.tier(sakura.unlockRating - 1).label).toBe("ブロンズ II")
 				expect(table.concat(Arenas.shared(1200, 1000), ",")).toBe("Rooftop")
 				expect(table.concat(Arenas.shared(1200, 1300), ",")).toBe("Rooftop,Sakura")
 			end,

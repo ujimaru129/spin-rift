@@ -650,12 +650,18 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	rally.Position = UDim2.new(0.5, 0, 0, 88)
 	rally.Size = UDim2.fromOffset(240, 22)
 
-	local wind = label(match, "", 16, Color3.fromRGB(255, 200, 225))
+	-- just under the scoreboard's left end (the top-left corner is under Roblox's own buttons)
+	local wind = label(scoreboard, "", 15, Color3.fromRGB(255, 200, 225))
 	wind.AnchorPoint = Vector2.new(0, 0)
-	wind.Position = UDim2.new(0, 14, 0, 14)
-	wind.Size = UDim2.fromOffset(200, 22)
+	wind.Position = UDim2.new(0, 0, 1, 3)
+	wind.Size = UDim2.fromOffset(160, 20)
 	wind.TextXAlignment = Enum.TextXAlignment.Left
 	wind.Visible = false
+	local windStroke = Instance.new("UIStroke")
+	windStroke.Thickness = 2
+	windStroke.Color = Color3.new(0, 0, 0)
+	windStroke.Transparency = 0.2
+	windStroke.Parent = wind
 
 	local tutorial = label(match, "", 18, Palette.Grade.Good)
 	tutorial.AnchorPoint = Vector2.new(0.5, 0)

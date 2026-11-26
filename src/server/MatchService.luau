@@ -38,7 +38,9 @@ local ONLINE = "Online" -- casual match with someone in this server
 local RANKED = "Ranked"
 local TUTORIAL = "Tutorial"
 local TUTORIAL_RETURNS = 3 -- returns needed in the first tutorial step
-local ARENA_SPACING = 400 -- studs between arenas
+-- studs between arenas. They are lined up along Z, across the line of play, because every
+-- match camera looks along X: a neighbouring table never shows up behind the opponent.
+local ARENA_SPACING = 400
 local AUTO_SERVE_AFTER = 5 -- seconds a player may wait before their serve goes in automatically
 -- balls in a row a player may let go by without doing anything before they lose a 1v1 match
 -- (stops two idle players from playing an endless deuce)
@@ -343,7 +345,7 @@ local function begin(
 	arenaId: string?
 )
 	local slot = freeSlot()
-	local origin = Vector3.new(slot * ARENA_SPACING, 200, 0)
+	local origin = Vector3.new(0, 200, slot * ARENA_SPACING)
 	local arenaDef = Arenas.get(arenaId or Arenas.DEFAULT) or Arenas.List[1]
 	-- gimmicks are for casual play only; ranked is always fair
 	local windy = arenaDef.wind and mode ~= RANKED and mode ~= TUTORIAL

@@ -311,11 +311,11 @@ local function build(): Model
 		gui.Parent = panel
 	end
 
-	-- the low sun and its halo, far beyond the opponent
-	local sun = ball(m, v(620, 95, 110), 70, SUN, true)
+	-- the low sun and its halo, up and left of the opponent (clear of the phone buttons)
+	local sun = ball(m, v(620, 150, -130), 70, SUN, true)
 	glow(sun, SUN, 60, 1)
-	ball(m, v(630, 95, 112), 120, Color3.fromRGB(255, 170, 170), true).Transparency = 0.75
-	ball(m, v(640, 95, 114), 190, Color3.fromRGB(255, 150, 190), true).Transparency = 0.88
+	ball(m, v(630, 150, -132), 120, Color3.fromRGB(255, 170, 170), true).Transparency = 0.75
+	ball(m, v(640, 150, -134), 190, Color3.fromRGB(255, 150, 190), true).Transparency = 0.88
 
 	-- a sea of clouds below, warmer towards the sun
 	for _ = 1, 70 do

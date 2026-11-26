@@ -1031,27 +1031,27 @@ local ABILITY: { [string]: { [string]: AbilityText } } = {
 		en = {
 			name = "Lightning Smash",
 			role = "Attack",
-			effect = "Your next return is 1.6x faster and the opponent's timing window shrinks to 65%",
+			effect = "Your next return is 1.6x faster and the opponent's timing window shrinks to 75%",
 		},
 		es = {
 			name = "Remate relámpago",
 			role = "Ataque",
-			effect = "Tu próxima devolución va 1,6 veces más rápido y la ventana de tiempo del rival baja al 65%",
+			effect = "Tu próxima devolución va 1,6 veces más rápido y la ventana de tiempo del rival baja al 75%",
 		},
 		pt = {
 			name = "Cortada relâmpago",
 			role = "Ataque",
-			effect = "Sua próxima rebatida é 1,6x mais rápida e a janela do oponente cai para 65%",
+			effect = "Sua próxima rebatida é 1,6x mais rápida e a janela do oponente cai para 75%",
 		},
 		ko = {
 			name = "라이트닝 스매시",
 			role = "공격",
-			effect = "다음 리턴이 1.6배 빨라지고 상대의 타이밍 폭이 65%로 줄어든다",
+			effect = "다음 리턴이 1.6배 빨라지고 상대의 타이밍 폭이 75%로 줄어든다",
 		},
 		id = {
 			name = "Smes Kilat",
 			role = "Serang",
-			effect = "Pukulan berikutnya 1,6x lebih cepat dan jendela waktu lawan jadi 65%",
+			effect = "Pukulan berikutnya 1,6x lebih cepat dan jendela waktu lawan jadi 75%",
 		},
 	},
 	Phantom = {

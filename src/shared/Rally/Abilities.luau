@@ -21,17 +21,17 @@ local Abilities = {}
 
 -- Numbers each ability uses. Tuned with tools/balance.luau.
 Abilities.Tuning = {
-	Curve = { amount = 3.2, revealAt = 0.65 }, -- sideways bend (studs) and when a reader can tell
-	Smash = { speed = 1.6, window = 0.65, arc = 0.55 }, -- speed x1.6, timing windows x0.65, flatter arc
+	Curve = { amount = 4.6, revealAt = 0.65 }, -- sideways bend (studs) and when a reader can tell
+	Smash = { speed = 1.6, window = 0.75, arc = 0.55 }, -- speed x1.6, timing windows x0.75, flatter arc
 	Phantom = { spread = 1.4 },
 	TimeSlow = { factor = 0.5, length = 2, window = 1.3 }, -- a slowed ball is easier to time
 	Barrier = { returnWindow = 2.3 }, -- the barrier's weak return is very easy to put away
 	GravityWell = { factor = 0.5, length = 4 },
 	Blink = { distance = 6 },
-	Zigzag = { amount = 1.6, waves = 3 }, -- sideways swing (studs) and number of half-waves
-	QuantumStop = { length = 0.4, factor = 0.05 }, -- stops over the net for `length` seconds
+	Zigzag = { amount = 1.45, waves = 3 }, -- sideways swing (studs) and number of half-waves
+	QuantumStop = { length = 0.2, factor = 0.05 }, -- stops over the net for `length` seconds
 	Meteor = { arc = 2.4, window = 0.9 }, -- a much higher first arc; harder to time
-	EMP = { length = 2.5, timingSd = 1.5 }, -- the opponent's screen is jammed (bots time worse)
+	EMP = { length = 2.5, timingSd = 1.35 }, -- the opponent's screen is jammed (bots time worse)
 }
 
 -- When instant abilities fire by themselves (see Match.autoUse).
@@ -61,7 +61,7 @@ local LIST: { Def } = {
 		kind = "shot",
 		cost = 5,
 		rgb = { 255, 210, 63 },
-		effect = "次の返球が1.6倍速。相手の打てる時間の幅が65%になる",
+		effect = "次の返球が1.6倍速。相手の打てる時間の幅が75%になる",
 		counter = "リフトバリア、早めの位置取り",
 	},
 	{
