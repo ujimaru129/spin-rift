@@ -725,10 +725,14 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	controlsPad.PaddingTop = UDim.new(0, 6)
 	controlsPad.Parent = controls
 
-	local popup = label(match, "", 64, INK)
-	popup.AnchorPoint = Vector2.new(0.5, 0.5)
-	popup.Position = UDim2.fromScale(0.5, 0.36)
-	popup.Size = UDim2.fromOffset(600, 80)
+	-- Hit grades and point results sit just above the gauge, out of the way of the table
+	-- (the table itself only shows the rally's effects)
+	local popup = label(match, "", 40, INK)
+	popup.AnchorPoint = Vector2.new(0, 1)
+	popup.Position = UDim2.new(0, 20, 1, -94)
+	popup.Size = UDim2.fromOffset(460, 56)
+	popup.TextXAlignment = Enum.TextXAlignment.Left
+	popup.TextYAlignment = Enum.TextYAlignment.Bottom
 	popup.TextTransparency = 1
 	local popupStroke = Instance.new("UIStroke")
 	popupStroke.Thickness = 3
@@ -736,9 +740,10 @@ function Hud.new(playerGui: PlayerGui, callbacks: Callbacks): Hud
 	popupStroke.Transparency = 1
 	popupStroke.Parent = popup
 	local popupSub = label(match, "", 18, INK, FONT_REGULAR)
-	popupSub.AnchorPoint = Vector2.new(0.5, 0)
-	popupSub.Position = UDim2.fromScale(0.5, 0.42)
-	popupSub.Size = UDim2.fromOffset(400, 24)
+	popupSub.AnchorPoint = Vector2.new(0, 1)
+	popupSub.Position = UDim2.new(0, 20, 1, -72)
+	popupSub.Size = UDim2.fromOffset(400, 22)
+	popupSub.TextXAlignment = Enum.TextXAlignment.Left
 	popupSub.TextTransparency = 1
 	local subStroke = Instance.new("UIStroke")
 	subStroke.Thickness = 2
@@ -1595,8 +1600,7 @@ function Hud.popupGrade(self: Hud, grade: string, offset: number?)
 	local color = if grade == "Barrier" then abilityColor("Barrier") else (Palette.Grade[grade] or INK)
 	self.popup.Text = if S.has("grade." .. grade) then S.t("grade." .. grade) else grade
 	self.popup.TextColor3 = color
-	self.popup.Size = UDim2.fromOffset(600, if grade == "Perfect" then 96 else 72)
-	self.popup.TextSize = if grade == "Perfect" then 72 else 54
+	self.popup.TextSize = if grade == "Perfect" then 48 else 38
 	local sub = ""
 	if offset and grade ~= "Perfect" and grade ~= "Barrier" then
 		local ms = math.round(math.abs(offset) * 1000)
@@ -1610,7 +1614,7 @@ end
 function Hud.popupText(self: Hud, text: string, color: Color3)
 	self.popup.Text = text
 	self.popup.TextColor3 = color
-	self.popup.TextSize = 54
+	self.popup.TextSize = 34
 	self.popupSub.Text = ""
 	showAndFade(self.popup, 0.5, 0.9)
 end
