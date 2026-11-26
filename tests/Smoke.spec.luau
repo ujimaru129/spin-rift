@@ -204,6 +204,33 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"the Sakura garden builds round the arena, keeps the view down the table open, and hides",
+			function()
+				local Garden = loader.require("src/client/Garden")
+				local origin = Vector3.new(0, 200, 800)
+				Garden.show(origin, -1)
+				local m = globals.workspace:FindFirstChild("SakuraGarden")
+				local parts = #m:GetChildren()
+				expect(parts > 400 and parts < 2500).toBeTruthy()
+				for _, p in m:GetChildren() do
+					if p ~= m.PrimaryPart and (p.Transparency or 0) < 1 then
+						local at = p.Position - origin
+						-- nothing in the arena itself, nor between the table and the opponent's back wall
+						local arena = math.sqrt(at.X ^ 2 + at.Z ^ 2) < 26 and at.Y > -10
+						local corridor = at.X > 0 and at.X < 60 and math.abs(at.Z) < 14 and at.Y > -4 and at.Y < 30
+						if arena or corridor then
+							error(`garden part {p.Name} in the way at {at}`)
+						end
+					end
+				end
+				globals.game:GetService("RunService").Heartbeat:Fire(1 / 60)
+				Garden.show(origin, 1)
+				expect(m.PrimaryPart.Position).toBe(origin)
+				Garden.show(nil)
+				expect(globals.workspace:FindFirstChild("SakuraGarden")).toBe(nil)
+			end,
+		},
+		{
 			"picking abilities keeps the 2 most recent, and never empties the loadout",
 			function()
 				local hud = newHud()

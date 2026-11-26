@@ -21,6 +21,7 @@ local Audio = require(script.Audio)
 local Hud = require(script.Hud)
 local ArenaLook = require(script.ArenaLook)
 local City = require(script.City)
+local Garden = require(script.Garden)
 local SeasonFolder = Shared:WaitForChild("Season")
 local Arenas = require(SeasonFolder:WaitForChild("Arenas"))
 local Cosmetics = require(SeasonFolder:WaitForChild("Cosmetics"))
@@ -437,6 +438,7 @@ local function endMatchView()
 	windActive = false
 	hud:setWind(nil)
 	ArenaLook.apply(nil)
+	Garden.show(nil)
 	City.show(MENU_CITY)
 	ball:hide()
 	camera.CameraType = Enum.CameraType.Custom
@@ -524,7 +526,9 @@ local function onEvent(e: { [string]: any })
 		ArenaLook.apply(e.arena)
 		if e.arena == "Sakura" then
 			City.show(nil)
+			Garden.show(e.origin, e.side)
 		else
+			Garden.show(nil)
 			City.show(e.origin, e.side)
 		end
 		windActive = e.wind == true
