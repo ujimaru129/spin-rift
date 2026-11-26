@@ -56,6 +56,11 @@ local MOUSE_AIM_FOR = 1.5
 local lastMouseMove = -math.huge
 local shake = 0
 local cameraZ = 0
+-- Match camera: how far behind the paddle line it sits, how high, and its field of view.
+-- Close and narrow enough that the table fills the middle of a phone screen.
+local MATCH_FOV = 46
+local CAMERA_BACK = 14
+local CAMERA_HEIGHT = 10
 local lastSwingSent = 0
 local selectedArena = Arenas.DEFAULT
 local bestRating = 1000
@@ -283,8 +288,8 @@ local function setJump(enabled: boolean)
 end
 
 local function flashFov(amount: number)
-	camera.FieldOfView = 52 + amount
-	TweenService:Create(camera, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { FieldOfView = 52 }):Play()
+	camera.FieldOfView = MATCH_FOV + amount
+	TweenService:Create(camera, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { FieldOfView = MATCH_FOV }):Play()
 end
 
 local function serveHint(server: number)
@@ -541,7 +546,7 @@ local function onEvent(e: { [string]: any })
 			hud:announceAbility(S.t("ability.theirLoadout", { list = table.concat(names, " / ") }), Palette.TeamB)
 		end
 		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = 52
+		camera.FieldOfView = MATCH_FOV
 		setJump(false)
 	elseif kind == "Score" then
 		hud:setScore(e, me)
@@ -713,7 +718,7 @@ RunService.RenderStepped:Connect(function(dt)
 	local root = myRoot()
 	local z = if root then root.Position.Z - o.Z else 0
 	cameraZ += (z - cameraZ) * math.min(dt * 4, 1)
-	local eye = o + Vector3.new(mySide * (Config.HitX + 17), 11, cameraZ * 0.55)
+	local eye = o + Vector3.new(mySide * (Config.HitX + CAMERA_BACK), CAMERA_HEIGHT, cameraZ * 0.55)
 	local focus = o + Vector3.new(-mySide * 2, Config.Table.surfaceY, cameraZ * 0.25)
 	local cf = CFrame.lookAt(eye, focus)
 	if shake > 0 then
