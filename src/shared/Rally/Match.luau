@@ -35,6 +35,7 @@ export type Match = typeof(setmetatable(
 		nextSlot: { number }, -- loadout slot that fires by itself once the gauge covers it
 		slowedUntil: { number }, -- Gravity Well: server time each player's movement is slowed until
 		whiffed: Trajectory.Shot?, -- a barrier-protected miss: no second swing at the same ball
+		forgiven: Trajectory.Shot?, -- the ball whose one early whiff was let off (see Match.swing)
 		windAt: ((time: number) -> number)?, -- arena wind (casual Sakura Float), nil for none
 		drag: number?, -- arena flight-time multiplier (casual Aquarium Dome), nil for none
 		idle: { number }, -- points each player has lost in a row without doing anything
@@ -85,6 +86,7 @@ function Match.new(now: number, firstServer: number?, loadouts: { { string } }?,
 		nextSlot = { 1, 1 },
 		slowedUntil = { 0, 0 },
 		whiffed = nil :: Trajectory.Shot?,
+		forgiven = nil :: Trajectory.Shot?,
 		windAt = if options then options.windAt else nil,
 		drag = if options then options.drag else nil,
 		idle = { 0, 0 },
@@ -251,6 +253,13 @@ function Match.swing(self: Match, index: number, time: number, aimZ: number, pla
 	local reached = Judge.inReach(shot.to.Z, playerZ)
 	if grade == "Miss" or not reached then
 		local miss: Event = { kind = "Swing", player = index, grade = "Miss", offset = offset, reached = reached }
+		if offset < 0 and self.forgiven ~= shot then
+			-- the first swing that comes too early (or before getting across) is let off once per
+			-- ball: a slip of the finger should not lose the point while the ball is still coming
+			self.forgiven = shot
+			miss.retry = true
+			return { miss }
+		end
 		if self.barrier[index] then
 			-- the barrier will return it when the ball arrives
 			miss.protected = true

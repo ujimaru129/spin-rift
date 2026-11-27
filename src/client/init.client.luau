@@ -610,6 +610,9 @@ local function onEvent(e: { [string]: any })
 			hud:popupGrade(e.grade, e.offset)
 			if e.protected then
 				hud:setHint(S.t("hint.protected"))
+			elseif e.retry then
+				-- an early slip is let off once per ball
+				hud:setHint(S.t("hint.retry"))
 			end
 			if e.grade ~= "Miss" then
 				ball:hitEffect(e.grade)

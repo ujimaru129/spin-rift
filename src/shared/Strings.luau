@@ -564,6 +564,14 @@ local T: { [string]: Entry } = {
 		ko = "상대 서브",
 		id = "Servis lawan",
 	},
+	["hint.retry"] = {
+		ja = "早すぎ！もう一回だけ振れる",
+		en = "Too early! You get one more swing",
+		es = "¡Muy pronto! Tienes un golpe más",
+		pt = "Cedo demais! Você tem mais uma tacada",
+		ko = "너무 빨라! 한 번 더 칠 수 있다",
+		id = "Terlalu cepat! Kamu dapat satu ayunan lagi",
+	},
 	["hint.protected"] = {
 		ja = "バリアが守ってくれる！",
 		en = "Your barrier will save it!",

@@ -217,7 +217,8 @@ return function(loader, expect)
 				local m = rallyWith({}, { "Barrier" })
 				m:useAbility(2, 1, m.shot.startTime + 0.1)
 				expect(m.barrier[2]).toBe(true)
-				-- player 2 whiffs: protected, no point
+				-- player 2 whiffs twice (the first early one is let off anyway): protected, no point
+				expect(returnBall(m, -0.35)[1].retry).toBe(true)
 				local miss = returnBall(m, -0.3)
 				expect(#miss).toBe(1)
 				expect(miss[1].protected).toBe(true)

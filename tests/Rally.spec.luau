@@ -156,15 +156,44 @@ return function(loader, expect)
 			end,
 		},
 		{
-			"a whiff inside the window loses the point",
+			"an early whiff is let off once per ball; a second one, or a late one, loses the point",
 			function()
 				local m = Match.new(0)
 				serveAndGetShot(m, m.nextServeAt)
-				local events = returnBall(m, -0.3)
+				-- too early: shown as a miss, but the point goes on and you can swing again
+				local first = returnBall(m, -0.3)
+				expect(#first).toBe(1)
+				expect(first[1].grade).toBe("Miss")
+				expect(first[1].retry).toBe(true)
+				expect(m.phase).toBe("Rally")
+				-- the second try hits
+				expect(returnBall(m, 0)[1].grade).toBe("Perfect")
+				-- next ball (player 1 receives): two early whiffs, the second loses the point
+				expect(returnBall(m, -0.3)[1].retry).toBe(true)
+				local events = returnBall(m, -0.28)
 				expect(events[1].grade).toBe("Miss")
+				expect(events[1].retry).toBe(nil)
 				expect(events[2].kind).toBe("Point")
-				expect(events[2].winner).toBe(1)
+				expect(events[2].winner).toBe(2)
 				expect(events[2].reason).toBe("whiff")
+				-- a late whiff is never let off
+				local m2 = Match.new(0)
+				serveAndGetShot(m2, m2.nextServeAt)
+				local late = returnBall(m2, 0.3)
+				expect(late[2].kind).toBe("Point")
+				expect(late[2].reason).toBe("whiff")
+			end,
+		},
+		{
+			"an early swing from out of reach is let off once too, so you can still get across",
+			function()
+				local m = Match.new(0)
+				local shot = serveAndGetShot(m, m.nextServeAt)
+				local far = shot.to.Z + Config.Reach + 1
+				local first = m:swing(2, Trajectory.arrivalTime(shot) - 0.3, 0, far)
+				expect(first[1].retry).toBe(true)
+				expect(first[1].reached).toBe(false)
+				expect(m:swing(2, Trajectory.arrivalTime(shot), 0, shot.to.Z)[1].grade).toBe("Perfect")
 			end,
 		},
 		{
