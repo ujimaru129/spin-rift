@@ -248,14 +248,20 @@ local function build(): Model
 		local a, d = r(0, math.pi * 2), r(60, 600)
 		ball(m, v(math.cos(a) * d, FLOOR_Y - 4, math.sin(a) * d), v(r(40, 90), r(6, 14), r(40, 90)), pick(SAND))
 	end
-	local surface = part(m, CFrame.new(0, 260, 0), v(1600, 2, 1600), Color3.fromRGB(150, 220, 255), Enum.Material.Neon)
-	surface.Transparency = 0.55
+	-- the water's surface: solid and wide, so the sky never shows through (the fog colours it)
+	part(m, CFrame.new(0, 260, 0), v(4000, 2, 4000), Color3.fromRGB(40, 110, 170), Enum.Material.Neon)
+	part(m, CFrame.new(0, FLOOR_Y - 3, 0), v(4000, 2, 4000), SAND[2])
 
 	-- the dome: glowing ribs high over the arena (wide enough that none cross the view of the
 	-- opponent) and a ring round its foot
 	local DOME_R = 110
 	for i = 0, 15 do
 		local a = i / 16 * math.pi * 2
+		-- skip the two ribs that line up with the view down the table (they would stand straight
+		-- up behind the opponent)
+		if i % 8 == 0 then
+			continue
+		end
 		local last = v(math.cos(a) * DOME_R, FLOOR_Y, math.sin(a) * DOME_R)
 		for k = 1, 8 do
 			local up = k / 8 * math.pi / 2
