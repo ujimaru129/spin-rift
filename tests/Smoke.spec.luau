@@ -325,6 +325,30 @@ return function(loader, expect)
 					end
 					expect(view.shot).toBe(nil)
 				end
+				-- a ball bounced near the edge leaves a mark on the table where it landed
+				for _, p in view.folder:GetChildren() do
+					if p.Name == "BounceMark" then
+						p:Destroy() -- the earlier shots' marks (timers do not run in tests)
+					end
+				end
+				local edge = Trajectory.plan(from, -1, Config.MaxAim, "Good", 30)
+				view:setShot(edge, 30)
+				local t2 = 30
+				while t2 < Trajectory.bounceTime(edge) + 0.05 do
+					t2 += 1 / 60
+					view:update(t2, 1 / 60)
+				end
+				local marks = 0
+				local landed = origin + Trajectory.bouncePoint(edge)
+				for _, p in view.folder:GetChildren() do
+					if p.Name == "BounceMark" then
+						marks += 1
+						expect(math.abs(p.Position.Z - landed.Z) < 0.01).toBeTruthy()
+						expect(math.abs(p.Position.Z - origin.Z) < Config.Table.halfWidth).toBeTruthy()
+						expect(math.abs(p.Position.Y - (origin.Y + Config.Table.surfaceY)) < 0.1).toBeTruthy()
+					end
+				end
+				expect(marks).toBe(2)
 				view:updateShot(Trajectory.plan(from, -1, 0, "Good", 20))
 				view:barrierWall(1, roblox.Color3.new(0, 1, 1))
 				view:floorRing(-1, roblox.Color3.new(1, 0, 1), 4)

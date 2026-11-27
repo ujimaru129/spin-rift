@@ -303,6 +303,36 @@ function BallView.ring(self: BallView, worldPos: Vector3, color: Color3, size: n
 	end)
 end
 
+-- Where the ball bounced: a spot in the ball's colour with a ring round it, lying on the table and
+-- fading out, so a ball that bounces right at the edge is clearly seen to land in.
+BallView.BOUNCE_MARK_SECONDS = 0.9
+function BallView.bounceMark(self: BallView, worldPos: Vector3)
+	local seconds = BallView.BOUNCE_MARK_SECONDS
+	local flat = CFrame.new(worldPos) * CFrame.Angles(0, 0, math.rad(90))
+	for _, spec in { { 0.9, 0.15, 0.02 }, { 1.7, 0.35, 0.01 } } do
+		local d = Instance.new("Part")
+		d.Name = "BounceMark"
+		d.Shape = Enum.PartType.Cylinder
+		d.Material = Enum.Material.Neon
+		d.Color = Palette.Ball
+		d.Transparency = spec[2]
+		d.Anchored = true
+		d.CanCollide = false
+		d.CanQuery = false
+		d.CanTouch = false
+		d.CastShadow = false
+		d.Size = Vector3.new(spec[3], spec[1], spec[1])
+		d.CFrame = flat
+		d.Parent = self.folder
+		TweenService
+			:Create(d, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Transparency = 1 })
+			:Play()
+		task.delay(seconds, function()
+			d:Destroy()
+		end)
+	end
+end
+
 function BallView.hitEffect(self: BallView, grade: string)
 	local color = Palette.Grade[grade] or Color3.new(1, 1, 1)
 	local pos = self.ball.Position
@@ -385,7 +415,8 @@ function BallView.update(self: BallView, now: number, dt: number)
 		if not self.bounced and now - behind >= Trajectory.bounceTime(shot) then
 			self.bounced = true
 			local b = self.origin + Trajectory.bouncePoint(shot) - Vector3.new(0, Config.Ball.radius - 0.05, 0)
-			self:ring(b, Palette.Shot[shot.kind] or Color3.new(1, 1, 1), 2.2, Vector3.yAxis)
+			self:ring(b, Palette.Shot[shot.kind] or Color3.new(1, 1, 1), 3, Vector3.yAxis)
+			self:bounceMark(b)
 			Audio.ball("Bounce")
 		end
 	end
