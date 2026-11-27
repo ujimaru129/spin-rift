@@ -50,10 +50,10 @@ local LOOKS: { [string]: Look } = {
 	-- under the sea: deep blue water that swallows the distance (the scenery is drawn by Aquarium)
 	Aquarium = {
 		clock = 12,
-		brightness = 1.6,
-		ambient = Color3.fromRGB(70, 110, 150),
-		outdoor = Color3.fromRGB(90, 140, 180),
-		fog = { color = Color3.fromRGB(18, 78, 128), from = 60, to = 720 },
+		brightness = 0.9,
+		ambient = Color3.fromRGB(40, 80, 120),
+		outdoor = Color3.fromRGB(50, 95, 140),
+		fog = { color = Color3.fromRGB(14, 62, 110), from = 40, to = 520 },
 		atmosphere = Color3.fromRGB(18, 78, 128),
 		decay = Color3.fromRGB(10, 40, 80),
 		haze = 2,

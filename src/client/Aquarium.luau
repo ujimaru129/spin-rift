@@ -300,15 +300,14 @@ local function build(): Model
 		Enum.PartType.Cylinder
 	)
 
-	-- light falling from the surface
-	for _ = 1, 18 do
-		local x, z = r(-300, 400), r(-300, 300)
-		if math.abs(z) > 70 or x > 250 then
-			local top = v(x, 250, z)
-			local bottom = v(x + r(20, 50), FLOOR_Y, z + r(-20, 20))
-			local ray = beam(m, top, bottom, r(10, 24), RAY, Enum.Material.Neon)
-			ray.Transparency = 0.9
-		end
+	-- light falling from the surface, off to the sides only (glowing beams behind the opponent
+	-- wash the whole view out to white)
+	for _ = 1, 10 do
+		local x, z = r(-200, 300), r(110, 300) * (if r(0, 1) < 0.5 then -1 else 1)
+		local top = v(x, 250, z)
+		local bottom = v(x + r(20, 50), FLOOR_Y, z + r(-20, 20))
+		local ray = beam(m, top, bottom, r(8, 18), RAY, Enum.Material.Neon)
+		ray.Transparency = 0.95
 	end
 
 	-- reefs, kelp and rocks outside the dome (never in the view down the table)
@@ -323,16 +322,16 @@ local function build(): Model
 			if r(0, 1) < 0.7 then
 				coral(m, top, s)
 			end
-			for _ = 1, math.floor(r(0, 4)) do
+			for _ = 1, math.floor(r(0, 2.5)) do
 				kelp(m, v(x + r(-12, 12), FLOOR_Y, z + r(-12, 12)), r(20, 50) * s)
 			end
 		end
 	end
-	-- a kelp forest along both sides of the view
-	for _ = 1, 60 do
-		local x = r(20, 380)
-		local z = (18 + x * 0.32 + r(6, 50)) * (if r(0, 1) < 0.5 then -1 else 1)
-		kelp(m, v(x, FLOOR_Y, z), r(30, 70))
+	-- kelp along both sides of the view, kept back from the table
+	for _ = 1, 26 do
+		local x = r(60, 380)
+		local z = (18 + x * 0.32 + r(30, 90)) * (if r(0, 1) < 0.5 then -1 else 1)
+		kelp(m, v(x, FLOOR_Y, z), r(30, 60))
 	end
 	-- two rock arches framing the far end of the view
 	for _, sz in { -1, 1 } do
