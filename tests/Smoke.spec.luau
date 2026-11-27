@@ -1350,6 +1350,7 @@ return function(loader, expect)
 				-- in a published game the button opens Roblox's purchase prompt; the item arrives
 				-- when Roblox says the pass was bought
 				local item = Shop.get("trail_crimson") :: any
+				local realPass = item.passId
 				item.passId = 777
 				local prompted = nil
 				local prompt = market.PromptGamePassPurchase
@@ -1365,7 +1366,7 @@ return function(loader, expect)
 				expect(last("PassUpdate").bought).toBe("trail_crimson")
 				Fake.studio = true
 				market.PromptGamePassPurchase = prompt
-				item.passId = 0
+				item.passId = realPass
 			end,
 		},
 	}

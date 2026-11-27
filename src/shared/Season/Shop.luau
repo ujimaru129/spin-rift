@@ -3,8 +3,8 @@
 -- purchase, so it survives anything that happens to our saved data; the server copies it into
 -- the player's items when they join (see server/Shop).
 --
--- passId = 0 until the pass is created on the Creator Dashboard (Monetization > Passes). Until
--- then, and always in Studio, the buy button grants the item for free so the flow can be tested.
+-- passId is the game pass on the Creator Dashboard (Monetization > Passes); 0 for an item with no
+-- pass yet. Such items, and every item in Studio, are granted for free so the flow can be tested.
 
 local Shop = {}
 
@@ -17,16 +17,16 @@ export type Item = {
 }
 
 Shop.Items = {
-	{ id = "paddle_coral", kind = "paddle", price = 49, passId = 0 },
-	{ id = "paddle_aqua", kind = "paddle", price = 79, passId = 0 },
-	{ id = "paddle_obsidian", kind = "paddle", price = 99, passId = 0 },
-	{ id = "trail_mint", kind = "trail", price = 49, passId = 0 },
-	{ id = "trail_sunset", kind = "trail", price = 79, passId = 0 },
-	{ id = "trail_crimson", kind = "trail", price = 99, passId = 0 },
-	{ id = "ability_Feint", kind = "ability", price = 149, passId = 0 },
-	{ id = "ability_SpinKick", kind = "ability", price = 149, passId = 0 },
-	{ id = "ability_Drain", kind = "ability", price = 149, passId = 0 },
-	{ id = "arena_Aquarium", kind = "arena", price = 199, passId = 0 },
+	{ id = "paddle_coral", kind = "paddle", price = 49, passId = 2099574849 },
+	{ id = "paddle_aqua", kind = "paddle", price = 79, passId = 2101890128 },
+	{ id = "paddle_obsidian", kind = "paddle", price = 99, passId = 2099094769 },
+	{ id = "trail_mint", kind = "trail", price = 49, passId = 2098908826 },
+	{ id = "trail_sunset", kind = "trail", price = 79, passId = 2099916809 },
+	{ id = "trail_crimson", kind = "trail", price = 99, passId = 2099928834 },
+	{ id = "ability_Feint", kind = "ability", price = 149, passId = 2098674856 },
+	{ id = "ability_SpinKick", kind = "ability", price = 149, passId = 2100162759 },
+	{ id = "ability_Drain", kind = "ability", price = 149, passId = 2098590783 },
+	{ id = "arena_Aquarium", kind = "arena", price = 199, passId = 2098794831 },
 } :: { Item }
 
 local BY_ID: { [string]: Item } = {}

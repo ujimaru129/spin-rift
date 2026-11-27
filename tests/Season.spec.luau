@@ -113,6 +113,9 @@ return function(loader, expect)
 					expect(seen[item.id]).toBe(nil)
 					seen[item.id] = true
 					expect(item.price > 0).toBeTruthy()
+					-- every item has its game pass: with 0 a published game would hand it out free
+					expect(item.passId > 0).toBeTruthy()
+					expect(Shop.byPass(item.passId)).toBe(item)
 					expect(Shop.get(item.id)).toBe(item)
 					if item.kind == "paddle" or item.kind == "trail" then
 						expect(Cosmetics.get(item.id).kind).toBe(item.kind)
