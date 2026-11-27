@@ -1322,6 +1322,46 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"the special moves and the arena picked are saved and come back after rejoining",
+			function()
+				local PlayerData = loader.require("src/server/PlayerData")
+				local replicated = globals.game:GetService("ReplicatedStorage")
+				local remotes = replicated:FindFirstChild("SpinRiftRemotes")
+				local me = Fake.localPlayer
+				local seen = {}
+				remotes.MatchEvent.OnClientEvent:Connect(function(e)
+					table.insert(seen, e)
+				end)
+				local function last(kind)
+					for i = #seen, 1, -1 do
+						if seen[i].kind == kind then
+							return seen[i]
+						end
+					end
+					return nil
+				end
+				PlayerData.get(me.UserId).best = 1200 -- Sakura unlocked
+				remotes.RequestMatch:FireServer("Easy", { "Meteor", "Blink" }, "Sakura")
+				remotes.LeaveMatch:FireServer()
+				local saved = Fake.dataStores.PlayerData_v1["u_" .. me.UserId]
+				expect(table.concat(saved.loadout, ",")).toBe("Meteor,Blink")
+				expect(saved.arena).toBe("Sakura")
+				-- leave the game and come back: the menu gets them again
+				PlayerData.forget(me.UserId)
+				remotes.Hello:FireServer()
+				local profile = last("Profile")
+				expect(table.concat(profile.loadout, ",")).toBe("Meteor,Blink")
+				expect(profile.arena).toBe("Sakura")
+				-- the menu puts them back; a shop move the player does not own is left out
+				local hud = newHud()
+				hud:setPassState(profile.pass)
+				hud:setLoadout({ "SpinKick", "Smash" })
+				expect(table.concat(hud:getLoadout(), ",")).toBe("Smash")
+				hud:setLoadout(profile.loadout)
+				expect(table.concat(hud:getLoadout(), ",")).toBe("Meteor,Blink")
+			end,
+		},
+		{
 			"shop items are bought end to end: granted, kept, and usable only by their owner",
 			function()
 				local Shop = loader.require("src/shared/Season").Shop

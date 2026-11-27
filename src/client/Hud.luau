@@ -1551,6 +1551,13 @@ function Hud.refreshPicks(self: Hud, focus: string?)
 	end
 end
 
+-- The moves remembered from last time (Profile.loadout). Shop moves not owned are dropped.
+function Hud.setLoadout(self: Hud, loadout: { string })
+	local keep = Abilities.sanitize(loadout, self.owned)
+	self.loadout = keep
+	self:refreshPicks(keep[1])
+end
+
 function Hud.getLoadout(self: Hud): { string }
 	return table.clone(self.loadout)
 end

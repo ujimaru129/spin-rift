@@ -38,6 +38,7 @@ export type Data = {
 	items: { [string]: boolean }, -- cosmetics owned (kept across seasons)
 	equipped: { paddle: string, trail: string, title: string },
 	arena: string, -- last arena picked on the menu
+	loadout: { string }, -- the special moves last brought into a match (checked again when used)
 }
 
 local cache: { [number]: Data } = {}
@@ -63,6 +64,7 @@ local function fresh(): Data
 		items = {},
 		equipped = table.clone(Cosmetics.DEFAULT_EQUIPPED),
 		arena = "Rooftop",
+		loadout = { "Curve", "Barrier" },
 	}
 end
 

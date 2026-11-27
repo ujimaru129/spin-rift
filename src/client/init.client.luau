@@ -505,6 +505,9 @@ local function onEvent(e: { [string]: any })
 			setOwned(e.pass.items)
 			hud:setPassState(e.pass)
 		end
+		if e.loadout then
+			hud:setLoadout(e.loadout)
+		end
 		if not e.tutorialDone and hud.menuNote.Text == "" then
 			hud:setMenuNote(S.t("menu.tryTutorial"), true)
 		end

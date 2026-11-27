@@ -495,6 +495,7 @@ local function sendProfile(player: Player)
 		tutorialDone = data.tutorialDone,
 		best = data.best,
 		arena = data.arena,
+		loadout = Abilities.sanitize(data.loadout, data.items),
 		pass = Progression.state(data),
 	})
 end
@@ -576,8 +577,20 @@ local function request(player: Player, mode: unknown, loadout: unknown, arenaReq
 	end
 	local isBot = (Bot.Profiles :: any)[mode] ~= nil
 	leave(player, if isBot then "bot" elseif mode == RANKED then "requeue" else "other")
-	local chosen = Abilities.sanitize(loadout, PlayerData.get(player.UserId).items)
+	local data = PlayerData.get(player.UserId)
+	local savedArena, savedLoadout = data.arena, table.concat(data.loadout, ",")
+	local chosen = Abilities.sanitize(loadout, data.items)
 	local arena = chooseArena(player, arenaRequest)
+	-- remember the moves and the arena for next time; saved (not only kept in memory), so they
+	-- are still there after leaving the game
+	local keepArena = data.arena
+	if table.concat(chosen, ",") ~= savedLoadout or keepArena ~= savedArena then
+		data.loadout = table.clone(chosen)
+		task.spawn(PlayerData.update, player.UserId, function(d)
+			d.loadout = table.clone(chosen)
+			d.arena = keepArena
+		end)
+	end
 	if mode == RANKED then
 		if RankedRoom.isRoom() then
 			return
