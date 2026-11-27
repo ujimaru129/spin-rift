@@ -13,7 +13,7 @@ AudioIds.Music = {
 } :: { [string]: string }
 
 -- One sheet holds every special-move sound: one each SLOT seconds, in this order.
-AudioIds.Sheet = "rbxassetid://128938304580471"
+AudioIds.Sheet = "rbxassetid://124496340903801"
 AudioIds.SLOT = 3
 AudioIds.Sfx = {
 	"Curve",
@@ -31,14 +31,10 @@ AudioIds.Sfx = {
 	"BarrierHit", -- the barrier returns a ball
 	"Win",
 	"Lose",
+	"Feint", -- the shop moves, added at the end so the others keep their places
+	"SpinKick",
+	"Drain",
 }
-
--- Shop moves borrow a sound from the sheet until their own are made and uploaded.
-AudioIds.Alias = {
-	Feint = "Zigzag",
-	SpinKick = "Meteor",
-	Drain = "GravityWell",
-} :: { [string]: string }
 
 -- A second sheet for the ball itself: one sound every HIT_SLOT seconds.
 AudioIds.HitSheet = "rbxassetid://124496883304992"
@@ -56,7 +52,7 @@ end
 
 -- Where a sound sits in the sheet, in seconds (nil when there is none by that name).
 function AudioIds.region(name: string): (number?, number?)
-	local i = table.find(AudioIds.Sfx, AudioIds.Alias[name] or name)
+	local i = table.find(AudioIds.Sfx, name)
 	if not i then
 		return nil, nil
 	end

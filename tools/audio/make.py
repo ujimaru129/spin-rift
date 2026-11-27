@@ -518,6 +518,36 @@ def s_emp():
                (0.1, env(crackle(1.1, 1500), 0.01, 0.4), 0.5))
 
 
+def s_feint():
+    # a whoosh that heads one way, a sharp snap, then a swish back the other way
+    out = put((0, env(nsweep(0.45, 900, 3200), 0.12, 0.15), 0.7), (0, env(sweep(0.42, 300, 900, 1.3), 0.08, 0.15), 0.3))
+    snap = put((0, env(noise(0.03), 0.0005, 0.01), 0.7), (0, env(bell(93, 0.4, 0.08), 0.001, 0.1), 0.45))
+    back = put((0, env(nsweep(0.35, 4200, 700), 0.005, 0.18), 0.8), (0, env(sweep(0.3, 1800, 420, 0.7, "saw"), 0.003, 0.1), 0.3))
+    return put((0, out, 1.0), (0.44, snap, 1.0), (0.46, back, 1.0))
+
+
+def s_spinkick():
+    # a whirr that spins faster and faster, then a heavy kick and a rush forward
+    sec = 0.75
+    t = t_(sec)
+    rate = np.cumsum(np.linspace(6, 34, len(t))) / SR
+    whirr = filt(saw(140, t) + saw(141.3, t), 1400) * (0.55 + 0.45 * np.sin(2 * np.pi * rate))
+    return put((0, env(whirr, 0.25, 0.6), 0.45), (0, env(nsweep(sec, 300, 2600), 0.3, 0.5), 0.45),
+               (0.72, env(noise(0.04), 0.0005, 0.012), 0.6), (0.72, boom(0.9, 52, 3), 1.0),
+               (0.74, env(nsweep(0.6, 3500, 500), 0.005, 0.25), 0.6))
+
+
+def s_drain():
+    # a reversed swell sucking inwards, a falling warble, and a deep gulp at the end
+    sec = 0.8
+    t = t_(sec)
+    swell = filt(noise(sec), [300, 4000], "band") * (t / sec) ** 3
+    warble = sweep(sec, 1400, 160, 0.8) * (1 + 0.6 * np.sin(2 * np.pi * 11 * t))
+    gulp = env(sweep(0.35, 220, 60, 0.6), 0.005, 0.18)
+    return put((0, swell / (np.abs(swell).max() + 1e-6), 0.7), (0, env(warble, 0.2, 0.5), 0.35),
+               (0.78, gulp, 0.9), (0.78, env(bell(60, 0.8, 0.3), 0.002, 0.35), 0.3), (0.78, env(crackle(0.6, 700), 0.01, 0.25), 0.35))
+
+
 def s_barrierhit():
     return put((0, env(noise(0.05), 0.001, 0.02), 0.5), (0, boom(0.5, 90, 2), 0.6), *[(0, env(bell(m, 1.0, 0.3), 0.001, 0.35), 0.35) for m in (72, 79, 84)])
 
@@ -556,7 +586,8 @@ def h_bounce():
 
 SFX = [("Curve", s_curve), ("Smash", s_smash), ("Phantom", s_phantom), ("Blind", s_blind), ("TimeSlow", s_slow), ("Barrier", s_barrier),
        ("GravityWell", s_gravity), ("Blink", s_blink), ("Zigzag", s_zigzag), ("QuantumStop", s_quantum), ("Meteor", s_meteor), ("EMP", s_emp),
-       ("BarrierHit", s_barrierhit), ("Win", s_win), ("Lose", s_lose)]
+       ("BarrierHit", s_barrierhit), ("Win", s_win), ("Lose", s_lose), ("Feint", s_feint), ("SpinKick", s_spinkick), ("Drain", s_drain)]
+LATER = ("Feint", "SpinKick", "Drain")  # the shop moves, added to the end of the sheet
 
 
 def roomy(x):
@@ -596,11 +627,18 @@ if __name__ == "__main__":
             save(name, fn())
     if not want or "sfx" in want:
         sheet = np.zeros((int(len(SFX) * SLOT * SR), 2))
+        state = None
         for i, (n, fn) in enumerate(SFX):
+            if n in LATER and state is None:
+                # sounds added after the first upload must not change the random numbers the
+                # ball sounds below are made from (so the uploaded ones can be made again exactly)
+                state = rng.bit_generator.state
             x = roomy(fn())
             a = int(i * SLOT * SR)
             sheet[a : a + len(x)] = x
             print("  ", n, f"peak {np.abs(x).max():.2f}")
+        if state is not None:
+            rng.bit_generator.state = state
         save("sfx", sheet)
     if not want or "hits" in want:
         n = int(0.5 * SR)
