@@ -608,14 +608,13 @@ local function onEvent(e: { [string]: any })
 		refreshSlots()
 	elseif kind == "Ability" then
 		onAbilityEvent(e)
-	elseif kind == "Swing" then
+	elseif kind == "Swing" and not e.retry then
+		-- (an early slip that was let off, once per ball, shows nothing: as if it never happened.
+		-- MISS only appears when the point is really lost.)
 		if e.player == me then
 			hud:popupGrade(e.grade, e.offset)
 			if e.protected then
 				hud:setHint(S.t("hint.protected"))
-			elseif e.retry then
-				-- an early slip is let off once per ball
-				hud:setHint(S.t("hint.retry"))
 			end
 			if e.grade ~= "Miss" then
 				ball:hitEffect(e.grade)
