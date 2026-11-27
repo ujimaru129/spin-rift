@@ -1699,10 +1699,41 @@ local function dots(n: number): string
 	return string.rep("●", n) .. string.rep("○", 2 - n)
 end
 
+-- The number of the side that just scored pops and flickers through its colours for a moment.
+Hud.SCORE_FLASH_SECONDS = 1
+local flashTokens: { [TextLabel]: number } = setmetatable({}, { __mode = "k" }) :: any
+function Hud.flashScore(l: TextLabel, color: Color3)
+	local token = (flashTokens[l] or 0) + 1
+	flashTokens[l] = token
+	local colors = { color, Palette.Grade.Perfect, Color3.new(1, 1, 1) }
+	task.spawn(function()
+		local start = os.clock()
+		local k = 0
+		while os.clock() - start < Hud.SCORE_FLASH_SECONDS and flashTokens[l] == token do
+			k += 1
+			local t = (os.clock() - start) / Hud.SCORE_FLASH_SECONDS
+			l.TextColor3 = colors[k % #colors + 1]
+			l.TextSize = 34 + 14 * (1 - t)
+			task.wait(0.07)
+		end
+		if flashTokens[l] == token then
+			l.TextColor3 = INK
+			l.TextSize = 34
+		end
+	end)
+end
+
 function Hud.setScore(self: Hud, snap: { [string]: any }, me: number)
 	local them = if me == 1 then 2 else 1
+	local before = { tonumber(self.myPoints.Text) or 0, tonumber(self.theirPoints.Text) or 0 }
 	self.myPoints.Text = tostring(snap.points[me])
 	self.theirPoints.Text = tostring(snap.points[them])
+	if snap.points[me] > before[1] then
+		Hud.flashScore(self.myPoints, Palette.TeamA)
+	end
+	if snap.points[them] > before[2] then
+		Hud.flashScore(self.theirPoints, Palette.TeamB)
+	end
 	-- game dots only mean something when a match has more than one game
 	local manyGames = Config.Score.gamesToWinMatch > 1
 	self.myGames.Text = if manyGames then S.t("hud.games") .. " " .. dots(snap.games[me]) else ""

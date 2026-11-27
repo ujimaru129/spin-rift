@@ -1322,6 +1322,27 @@ return function(loader, expect)
 			end,
 		},
 		{
+			"the number of whoever just scored flashes; a new game back to 0-0 does not",
+			function()
+				local hud = newHud()
+				local flashed = {}
+				local real = Hud.flashScore
+				Hud.flashScore = function(l, _color)
+					table.insert(flashed, if l == hud.myPoints then "me" else "them")
+				end
+				local function snap(a, b)
+					return { points = { a, b }, games = { 0, 0 }, gauge = { 0, 0 }, server = 1 }
+				end
+				hud:setScore(snap(0, 0), 1)
+				hud:setScore(snap(1, 0), 1)
+				hud:setScore(snap(1, 1), 1)
+				hud:setScore(snap(1, 1), 2) -- seen from the other side: player 2 is "me"
+				hud:setScore(snap(0, 0), 1)
+				Hud.flashScore = real
+				expect(table.concat(flashed, ",")).toBe("me,them")
+			end,
+		},
+		{
 			"the special moves and the arena picked are saved and come back after rejoining",
 			function()
 				local PlayerData = loader.require("src/server/PlayerData")
